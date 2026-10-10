@@ -42,7 +42,11 @@ services:
       - ${NPM_LOGS}:/npm-logs:ro
 
   crowdsec-agent:
-    image: crowdsecurity/crowdsec:latest   # pin a version (e.g. v1.7.x) once it works
+    # "latest" picks up new CrowdSec releases (incl. security fixes) whenever the image is pulled:
+    # `docker compose pull && docker compose up -d`, or Update Stack in Compose Manager. It does not
+    # update on its own. Check the Status page after an update; if a release ever breaks the agent,
+    # pin the last good one here (tested with v1.8.1).
+    image: crowdsecurity/crowdsec:latest
     container_name: crowdsec-agent
     restart: unless-stopped
     environment:

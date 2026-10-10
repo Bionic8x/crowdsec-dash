@@ -155,6 +155,21 @@ def _alert_row(a: dict):
     )
 
 
+def _ban_length(created: str, until: str, fallback):
+    """The ban's planned length ("4h", "1h30m"). LAPI's own "duration" field is the time
+    *remaining* when we fetched it ("3h59m56s"), which reads oddly once stored."""
+    try:
+        secs = (datetime.fromisoformat(until.replace("Z", "+00:00"))
+                - datetime.fromisoformat(created.replace("Z", "+00:00"))).total_seconds()
+    except ValueError:
+        return fallback
+    mins = round(secs / 60)  # absorbs the second or two between alert and decision creation
+    if mins <= 0:
+        return fallback
+    h, m = divmod(mins, 60)
+    return f"{h}h{m}m" if h and m else f"{h}h" if h else f"{m}m"
+
+
 def _decision_rows(a: dict):
     created = norm_ts(a.get("created_at")) or now_iso()
     for d in a.get("decisions") or []:
@@ -164,7 +179,8 @@ def _decision_rows(a: dict):
             until = iso(utcnow() + dur) if dur is not None else created
         yield (
             d["id"], a["id"], d.get("origin"), d.get("type"), d.get("scope"), d.get("value"),
-            d.get("scenario"), d.get("duration"), until, created, int(bool(d.get("simulated"))),
+            d.get("scenario"), _ban_length(created, until, d.get("duration")), until, created,
+            int(bool(d.get("simulated"))),
         )
 
 

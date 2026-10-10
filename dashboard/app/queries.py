@@ -139,7 +139,7 @@ def decisions(state: str, q: str, limit: int) -> list[dict]:
                (d.until > :now) active,
                (SELECT COUNT(*) FROM fw_events f WHERE f.src_ip = d.value AND f.ts >= d.created_at
                     AND (d.until > :now OR f.ts <= d.until)) fw_hits,
-               (SELECT COUNT(*) FROM npm_requests n WHERE n.client_ip = d.value AND n.ts >= d.created_at
+               (SELECT COUNT(*) FROM npm_requests n WHERE n.client_ip = d.value AND n.ts > d.created_at
                     AND (d.until > :now OR n.ts <= d.until)) npm_after
         FROM decisions d LEFT JOIN alerts a ON a.id = d.alert_id
         {'WHERE ' + ' AND '.join(where) if where else ''}

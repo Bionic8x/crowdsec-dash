@@ -17,9 +17,16 @@ def main():
     if os.getuid() == 0 and uid != 0:
         os.makedirs(DATA, exist_ok=True)
         # earlier versions ran as root, so an existing dash.db is root-owned
+        failed = 0
         for root, dirs, files in os.walk(DATA):
             for name in [root] + [os.path.join(root, n) for n in dirs + files]:
-                os.lchown(name, uid, gid)
+                try:
+                    os.lchown(name, uid, gid)
+                except OSError:  # some bind mounts (Docker Desktop on Windows/macOS, NFS) refuse chown
+                    failed += 1
+        if failed:
+            print(f"entrypoint: could not chown {failed} path(s) under {DATA} to {uid}:{gid}; "
+                  f"if the dashboard can't write its database, fix the ownership or set PUID=0", file=sys.stderr)
         os.setgroups([])
         os.setgid(gid)
         os.setuid(uid)

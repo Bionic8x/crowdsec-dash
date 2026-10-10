@@ -1,0 +1,77 @@
+# Local test stack: the real docker-compose.yml plus a throwaway CrowdSec LAPI and fake log sources.
+# Nothing here talks to your real OPNsense. See test/README.md.
+#
+#   docker compose --env-file test/.env.test -f docker-compose.yml -f test/docker-compose.test.yml up -d --build
+
+name: csdtest
+
+services:
+  # Stand-in for the LAPI on OPNsense. No agent, no CrowdSec Central connection.
+  lapi:
+    image: crowdsecurity/crowdsec:latest
+    environment:
+      TZ: ${TZ:-America/New_York}
+      DISABLE_AGENT: "true"
+      DISABLE_ONLINE_API: "true"
+    volumes:
+      - lapi-data:/var/lib/crowdsec/data
+      - lapi-config:/etc/crowdsec
+    networks:
+      default:
+        ipv4_address: 172.31.99.2
+
+  crowdsec-dash:
+    depends_on: [lapi]
+    environment:
+      LAPI_POLL_SECONDS: "10"
+    volumes:
+      - ./test/data:/data          # replaces ./data:/data from the main file
+    networks:
+      default:
+        ipv4_address: 172.31.99.20
+
+  crowdsec-agent:
+    depends_on: [lapi]
+
+  # --- helper tools, run on demand with `docker compose ... run --rm <name> ...` -------------
+  # Stands in for Nginx Proxy Manager: writes access-log lines into the shared log volume.
+  npm:
+    image: python:3.12-slim
+    profiles: ["tools"]
+    volumes:
+      - npmlogs:/logs
+      - ./test/tools:/tools:ro
+    entrypoint: ["python", "/tools/npm_logs.py", "/logs"]
+
+  # Fake OPNsense: sends filterlog syslog from the address in SYSLOG_ALLOWED_SOURCES.
+  opnsense:
+    image: python:3.12-slim
+    profiles: ["tools"]
+    volumes:
+      - ./test/tools:/tools:ro
+    entrypoint: ["python", "/tools/send_syslog.py"]
+    networks:
+      default:
+        ipv4_address: 172.31.99.10
+
+  # Same packets from an address that is NOT allowed: these must be rejected.
+  rogue:
+    image: python:3.12-slim
+    profiles: ["tools"]
+    volumes:
+      - ./test/tools:/tools:ro
+    entrypoint: ["python", "/tools/send_syslog.py"]
+    networks:
+      default:
+        ipv4_address: 172.31.99.66
+
+volumes:
+  npmlogs:        # NPM_LOGS=npmlogs in .env.test points both containers' log mounts here
+  lapi-data:
+  lapi-config:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.31.99.0/24

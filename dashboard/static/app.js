@@ -38,12 +38,14 @@ function flag(cc) {
 }
 function country(cc) { return cc ? `${flag(cc)} ${esc(cc)}` : '<span class="muted">—</span>'; }
 
+// seconds -> "45s" / "12m" / "3.5h" / "2.0d"
+function dur(a) {
+  return a < 60 ? `${Math.round(a)}s` : a < 3600 ? `${Math.round(a / 60)}m` : a < 86400 ? `${(a / 3600).toFixed(a < 36000 ? 1 : 0)}h` : `${(a / 86400).toFixed(1)}d`;
+}
 function ago(iso) {
   if (!iso) return "—";
   const s = (Date.now() - Date.parse(iso)) / 1000;
-  const fut = s < 0, a = Math.abs(s);
-  const v = a < 60 ? `${Math.round(a)}s` : a < 3600 ? `${Math.round(a / 60)}m` : a < 86400 ? `${(a / 3600).toFixed(a < 36000 ? 1 : 0)}h` : `${(a / 86400).toFixed(1)}d`;
-  return fut ? `in ${v}` : `${v} ago`;
+  return s < 0 ? `in ${dur(-s)}` : `${dur(s)} ago`;
 }
 const fullTime = (iso) => (iso ? new Date(iso).toLocaleString() : "");
 const when = (iso) => `<span title="${esc(fullTime(iso))}">${ago(iso)}</span>`;
@@ -558,12 +560,18 @@ pages.ip = async (params, arg) => {
     <div class="grid g-map">
       <div class="card"><h2>Timeline <span class="sub">newest first — everything this IP did, from all sources</span></h2>
         <div class="tl">${d.timeline.length ? groupTimeline(d.timeline).map((e) => `<div class="tl-item"><span class="when" title="${esc(fullTime(e.ts))}${e.n > 1 ? " … " + esc(fullTime(e.first)) : ""}">${new Date(e.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
-          <span>${kindBadge(e)}</span><span class="mono" style="word-break:break-all">${esc(e.text)}${e.n > 1 ? ` <span class="badge">×${e.n} over ${ago(e.first).replace(" ago", "")}</span>` : ""}</span></div>`).join("") : '<div class="empty">Nothing recorded for this IP</div>'}</div></div>
+          <span>${kindBadge(e)}</span><span class="mono" style="word-break:break-all">${esc(e.text)}${e.n > 1 ? ` <span class="badge">×${e.n}${runLength(e)}</span>` : ""}</span></div>`).join("") : '<div class="empty">Nothing recorded for this IP</div>'}</div></div>
       <div class="card"><h2>Hosts it hit</h2>${topRows(d.hosts, (h) => `${esc(h.host)} <span class="muted">${num(h.err)} errors</span>`, (h) => h.n, "s1")}</div>
     </div>`;
   const b = $("#ipban");
   if (b) b.onclick = () => banForm(ip);
 };
+
+// " over 3m" = time between the first and last event of a grouped run (nothing if under a second)
+function runLength(e) {
+  const s = (Date.parse(e.ts) - Date.parse(e.first)) / 1000;
+  return s >= 1 ? ` over ${dur(s)}` : "";
+}
 
 // Collapse runs of identical events ("tcp → :22 on igb0" ×40) so the story stays readable.
 function groupTimeline(items) {
