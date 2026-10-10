@@ -47,3 +47,7 @@ docker compose up -d --build
 | IP page | Everything one IP did, from every source, in one timeline |
 
 IP geolocation by [DB-IP](https://db-ip.com) (CC BY 4.0). Map outlines: Natural Earth via world-atlas.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Bundles [d3](https://d3js.org) (ISC, notice kept in `dashboard/static/vendor/d3.min.js`).
