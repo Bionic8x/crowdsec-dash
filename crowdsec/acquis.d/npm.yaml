@@ -1,0 +1,7 @@
+# Tell the CrowdSec agent which log files to read and which parser to use.
+# The NPM log folder is mounted read-only at /var/log/npm by docker-compose.yml.
+filenames:
+  - /var/log/npm/proxy-host-*_access.log
+  - /var/log/npm/fallback_access.log
+labels:
+  type: nginx-proxy-manager

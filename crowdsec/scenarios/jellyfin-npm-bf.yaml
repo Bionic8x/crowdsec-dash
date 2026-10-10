@@ -1,0 +1,30 @@
+# A custom scenario - a good one to read and tweak while learning.
+#
+# CrowdSec scenarios are "leaky buckets": every matching event pours one drop
+# into a bucket per source IP. The bucket leaks one drop per `leakspeed`.
+# If it ever holds more than `capacity` drops, it overflows -> alert -> ban.
+#
+# Here: more than 5 failed Jellyfin logins (POST /Users/authenticatebyname
+# answered 401/403) from one IP, leaking 1 per minute.
+# One mistyped password from a real user won't trip it.
+type: leaky
+name: local/jellyfin-npm-bf
+description: "Jellyfin login brute force, seen in Nginx Proxy Manager access logs"
+filter: >-
+  evt.Meta.log_type == 'http_access-log'
+  && evt.Meta.http_verb == 'POST'
+  && evt.Meta.http_path startsWith '/Users/authenticatebyname'
+  && evt.Meta.http_status in ['401', '403']
+groupby: evt.Meta.source_ip
+capacity: 5
+leakspeed: 1m
+blackhole: 5m
+labels:
+  service: jellyfin
+  confidence: 3
+  spoofable: 0
+  classification:
+    - attack.T1110
+  label: "Jellyfin brute force"
+  behavior: "http:bruteforce"
+  remediation: true

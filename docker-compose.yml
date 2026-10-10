@@ -1,0 +1,62 @@
+# crowdsec-dash stack for Unraid (Compose Manager plugin) or any Docker host.
+#
+#   1. cp .env.example .env   and fill it in
+#   2. fix the NPM log path below (NPM_LOGS in .env)
+#   3. docker compose up -d --build
+#
+# Two containers:
+#   crowdsec-agent  reads NPM's access logs, detects attacks, and reports them to the
+#                   LAPI on OPNsense. It does no blocking itself; OPNsense does.
+#   crowdsec-dash   the dashboard: reads LAPI + NPM logs + OPNsense syslog.
+
+services:
+  crowdsec-dash:
+    build: ./dashboard
+    container_name: crowdsec-dash
+    restart: unless-stopped
+    ports:
+      - "8088:8088"          # web UI
+      - "5514:5514/udp"      # OPNsense remote syslog (filterlog) lands here
+    environment:
+      TZ: ${TZ:-America/New_York}
+      LAPI_URL: ${LAPI_URL}
+      LAPI_MACHINE_ID: ${DASH_MACHINE_ID:-crowdsec-dash}
+      LAPI_PASSWORD: ${DASH_MACHINE_PASSWORD}
+      NPM_LOG_DIR: /npm-logs
+      SYSLOG_PORT: 5514
+      FW_INTERFACES: ${FW_INTERFACES:-}      # e.g. igb0 to keep WAN drops only
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
+      CF_FETCH_EVENTS: ${CF_FETCH_EVENTS:-false}
+      DASH_USER: ${DASH_USER:-admin}
+      DASH_PASSWORD: ${DASH_PASSWORD:-}
+      ALLOW_WRITE: ${ALLOW_WRITE:-false}
+      RETENTION_DAYS: ${RETENTION_DAYS:-14}
+    volumes:
+      - ./data:/data
+      - ${NPM_LOGS}:/npm-logs:ro
+
+  crowdsec-agent:
+    image: crowdsecurity/crowdsec:latest   # pin a version (e.g. v1.7.x) once it works
+    container_name: crowdsec-agent
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/New_York}
+      DISABLE_LOCAL_API: "true"            # agent only - the LAPI lives on OPNsense
+      LOCAL_API_URL: ${LAPI_URL}
+      AGENT_USERNAME: ${AGENT_MACHINE_ID:-unraid-npm}
+      AGENT_PASSWORD: ${AGENT_MACHINE_PASSWORD}
+      COLLECTIONS: >-
+        crowdsecurity/nginx-proxy-manager
+        crowdsecurity/base-http-scenarios
+        crowdsecurity/http-cve
+    volumes:
+      - ./crowdsec/acquis.d:/etc/crowdsec/acquis.d:ro
+      - ./crowdsec/scenarios/jellyfin-npm-bf.yaml:/etc/crowdsec/scenarios/jellyfin-npm-bf.yaml:ro
+      - ./crowdsec/parsers/cloudflare-whitelist.yaml:/etc/crowdsec/parsers/s02-enrich/cloudflare-whitelist.yaml:ro
+      - crowdsec-agent-data:/var/lib/crowdsec/data
+      - crowdsec-agent-config:/etc/crowdsec
+      - ${NPM_LOGS}:/var/log/npm:ro
+
+volumes:
+  crowdsec-agent-data:
+  crowdsec-agent-config:
