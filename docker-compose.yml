@@ -15,20 +15,26 @@ services:
     container_name: crowdsec-dash
     restart: unless-stopped
     ports:
-      - "8088:8088"          # web UI
-      - "5514:5514/udp"      # OPNsense remote syslog (filterlog) lands here
+      # BIND_IP = the Unraid LAN address, so nothing on other interfaces (VPN, docker, WAN) can connect
+      - "${BIND_IP:-0.0.0.0}:8088:8088"          # web UI
+      - "${BIND_IP:-0.0.0.0}:5514:5514/udp"      # OPNsense remote syslog (filterlog) lands here
     environment:
       TZ: ${TZ:-America/New_York}
+      PUID: ${PUID:-99}                      # the dashboard runs as this user (99:100 = Unraid nobody:users)
+      PGID: ${PGID:-100}
       LAPI_URL: ${LAPI_URL}
       LAPI_MACHINE_ID: ${DASH_MACHINE_ID:-crowdsec-dash}
       LAPI_PASSWORD: ${DASH_MACHINE_PASSWORD}
       NPM_LOG_DIR: /npm-logs
       SYSLOG_PORT: 5514
+      SYSLOG_ALLOWED_SOURCES: ${SYSLOG_ALLOWED_SOURCES:-}   # OPNsense's IP; empty = accept anyone
       FW_INTERFACES: ${FW_INTERFACES:-}      # e.g. igb0 to keep WAN drops only
       CF_API_TOKEN: ${CF_API_TOKEN:-}
       CF_FETCH_EVENTS: ${CF_FETCH_EVENTS:-false}
       DASH_USER: ${DASH_USER:-admin}
       DASH_PASSWORD: ${DASH_PASSWORD:-}
+      ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-false}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       ALLOW_WRITE: ${ALLOW_WRITE:-false}
       RETENTION_DAYS: ${RETENTION_DAYS:-14}
     volumes:

@@ -18,6 +18,8 @@ import asyncio
 import ipaddress
 import json
 import logging
+import re
+import threading
 from datetime import datetime
 
 import requests
@@ -26,13 +28,18 @@ from .. import geoip, status
 from ..config import settings
 from ..db import db, iso, now_iso, utcnow
 from ..timeutil import norm_ts, parse_go_duration
+from . import cloudflare
 
 log = logging.getLogger("lapi")
 
 
 class LapiClient:
+    """Used from several worker threads (the poller plus Ban/Unban requests). requests.Session
+    isn't thread-safe and login() swaps the token, so every call goes through one lock."""
+
     def __init__(self):
         self.token = None
+        self.lock = threading.RLock()
         self.session = requests.Session()
         self.session.verify = settings.lapi_verify_tls
         self.session.headers["User-Agent"] = "crowdsec-dash/1.0"
@@ -49,15 +56,16 @@ class LapiClient:
         self.session.headers["Authorization"] = f"Bearer {self.token}"
 
     def request(self, method: str, path: str, **kw):
-        if not self.token:
-            self.login()
-        kw.setdefault("timeout", 60)
-        r = self.session.request(method, f"{settings.lapi_url}{path}", **kw)
-        if r.status_code == 401:  # JWT expired -> log in again once
-            self.login()
+        with self.lock:
+            if not self.token:
+                self.login()
+            kw.setdefault("timeout", 60)
             r = self.session.request(method, f"{settings.lapi_url}{path}", **kw)
-        r.raise_for_status()
-        return r.json() if r.content else None
+            if r.status_code == 401:  # JWT expired -> log in again once
+                self.login()
+                r = self.session.request(method, f"{settings.lapi_url}{path}", **kw)
+            r.raise_for_status()
+            return r.json() if r.content else None
 
     def alerts(self, **params):
         params.setdefault("limit", 0)  # 0 = no limit
@@ -176,8 +184,17 @@ def store_alerts(alerts: list[dict]):
     )
 
 
+_sync_lock = threading.Lock()
+
+
 def sync_once(first: bool):
-    """One poll cycle. Runs in a worker thread."""
+    """One poll cycle. Runs in a worker thread. Serialised: a Ban triggers an extra sync, and two
+    overlapping syncs could mark a just-created decision as removed."""
+    with _sync_lock:
+        return _sync_once(first)
+
+
+def _sync_once(first: bool):
     last = db.get_kv("lapi_last_poll")
     if first and not last:
         since = settings.lapi_lookback
@@ -237,9 +254,28 @@ def delete_decision(decision_id: int):
     return res
 
 
-def add_ban(ip: str, duration: str = "4h", reason: str = "manual ban from crowdsec-dash"):
+def check_ban_target(ip: str) -> str:
+    """Refuse bans that would hurt you rather than an attacker. Returns the normalised IP."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        raise ValueError(f"not an IP address: {ip!r}") from None
+    if addr.version == 6 and addr.ipv4_mapped:  # ::ffff:192.168.1.1 is really 192.168.1.1
+        addr = addr.ipv4_mapped
+    if (addr.is_unspecified or addr.is_loopback or addr.is_multicast or addr.is_link_local
+            or addr.is_reserved or geoip.is_private(str(addr))):
+        raise ValueError(f"refusing to ban {addr}: private, LAN or reserved address")
+    if cloudflare.is_cloudflare_ip(str(addr)):
+        raise ValueError(f"refusing to ban {addr}: it's a Cloudflare edge server (banning it breaks every proxied site)")
+    return str(addr)
+
+
+def add_ban(ip: str, duration: str = "4h", reason: str = ""):
     """Create a ban the same way `cscli decisions add` does: push an alert carrying a decision."""
-    ipaddress.ip_address(ip)  # raises ValueError on bad input
+    ip = check_ban_target(ip)
+    if duration not in settings.ban_durations:
+        raise ValueError(f"duration must be one of {', '.join(settings.ban_durations)}")
+    reason = re.sub(r"[\x00-\x1f\x7f]", " ", reason).strip()[:200] or "manual ban from crowdsec-dash"
     now = utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     alert = {
         "scenario": reason,

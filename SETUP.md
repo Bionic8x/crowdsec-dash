@@ -38,7 +38,7 @@ cscli machines add crowdsec-dash --password 'PASSWORD-2' -f /dev/null
 > Keep `-f /dev/null`. Without it, `cscli` overwrites OPNsense's own agent credentials file and the plugin's agent stops working.
 
 - `unraid-npm` is the CrowdSec agent on Unraid that reads NPM's logs.
-- `crowdsec-dash` is the dashboard. It reads alerts and decisions. It can only add or remove bans if you set `ALLOW_WRITE=true`.
+- `crowdsec-dash` is the dashboard. It reads alerts and decisions. Its UI only offers Ban/Unban if you set `ALLOW_WRITE=true`, but be aware that the machine account itself can always add and remove decisions: anyone who gets this password (or control of the container) can ban and unban. Treat it like an admin password.
 
 **Check.** `cscli machines list` shows both, plus OPNsense's own machine.
 
@@ -75,7 +75,7 @@ Copy this folder to Unraid, for example to `/mnt/user/appdata/crowdsec-dash`. Th
 ```sh
 cd /mnt/user/appdata/crowdsec-dash
 cp .env.example .env
-nano .env            # LAPI_URL, the two passwords, NPM_LOGS, FW_INTERFACES
+nano .env            # LAPI_URL, the two passwords, NPM_LOGS, FW_INTERFACES, DASH_PASSWORD, BIND_IP
 docker compose up -d --build
 ```
 
@@ -118,11 +118,16 @@ Create a token at **Cloudflare › My Profile › API Tokens › Create Token �
 
 Put it in `.env` as `CF_API_TOKEN`, then run `docker compose up -d`. The **Hosts & Cloudflare** page fills in the Protection column.
 
-## 8. Optional: lock it down
+## 8. Lock it down
 
-- Set `DASH_PASSWORD` in `.env` to require a login.
+- `DASH_PASSWORD` is required. Without it the dashboard answers every request with "no password" (set `ALLOW_NO_AUTH=true` only if you really want it open).
+- The login is HTTP Basic auth over plain HTTP, so anyone sniffing the LAN can read it. For real protection put the dashboard behind NPM with TLS.
+- Opening the dashboard by a host name (`unraid.lan`, or an NPM proxy host like `dash.example.com`)? Add that name to `ALLOWED_HOSTS`. IP addresses always work. Other names are refused, which blocks DNS-rebinding attacks from websites you visit.
+- Set `BIND_IP` to the Unraid LAN address and `SYSLOG_ALLOWED_SOURCES` to the OPNsense address, so only OPNsense can feed firewall events in.
 - Don't expose port 8088 to the internet. If you want it in NPM, make an internal-only proxy host with an Access List restricted to your LAN.
-- `ALLOW_WRITE=true` enables the Ban/Unban buttons. Leave it off until you're comfortable.
+- `ALLOW_WRITE=true` enables the Ban/Unban buttons. Leave it off until you're comfortable. Bans of private/LAN addresses and Cloudflare edge IPs are always refused.
+- The dashboard redacts credential-like query parameters (`api_key=`, `token=`, ... see `NPM_REDACT_PARAMS`) from stored request URLs. Rows stored before this existed are not changed; they age out after `RETENTION_DAYS`.
+- The dashboard runs as `PUID:PGID` (default `99:100`). If the Status page shows "Permission denied" for the NPM logs, set `PUID`/`PGID` to an owner of those files (`ls -ln` the log folder), or `PUID=0` to run as root.
 
 ---
 

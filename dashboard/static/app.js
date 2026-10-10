@@ -20,8 +20,9 @@ const state = { range: store.get("range", "24h"), mapLayer: store.get("mapLayer"
 const $ = (sel, root = document) => root.querySelector(sel);
 const view = $("#view");
 
-async function api(path, opts) {
-  const r = await fetch("/api/" + path, opts);
+async function api(path, opts = {}) {
+  // X-Dash-Request: the server refuses POST/DELETE without it (another site can't add it).
+  const r = await fetch("/api/" + path, { ...opts, headers: { ...opts.headers, "X-Dash-Request": "1" } });
   if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
   return r.json();
 }
@@ -216,8 +217,10 @@ async function worldMap(el, geo) {
 // ---------------------------------------------------------------------------
 // small building blocks
 // ---------------------------------------------------------------------------
+// href goes in a data attribute (escaped) and is followed by the click listener at the bottom.
+// Never build inline onclick JS from data: the IP page's href carries an IP taken from the URL.
 function kpi(label, value, hint, href) {
-  return `<div class="card kpi ${href ? "clickable" : ""}" ${href ? `onclick="location.hash='${href}'"` : ""}>
+  return `<div class="card kpi ${href ? "clickable" : ""}" ${href ? `data-href="${esc(href)}"` : ""}>
     <div class="label">${label}</div><div class="value">${value}</div>${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
 }
 
@@ -540,7 +543,7 @@ pages.ip = async (params, arg) => {
       ${d.private ? '<span class="badge b-good">private / LAN</span>' : ""}
       <span class="ink2">${flag(g.country)} ${esc([g.city, g.country].filter(Boolean).join(", "))} ${g.as_name ? `· AS${esc(g.asn)} ${esc(g.as_name)}` : ""}</span>
       <span style="margin-left:auto" class="filters">
-        ${write && !active && !d.private ? '<button class="btn danger" id="ipban">Ban…</button>' : ""}
+        ${write && !active && !d.private && !d.cloudflare_edge ?'<button class="btn danger" id="ipban">Ban…</button>' : ""}
         <a class="btn" href="https://app.crowdsec.net/cti/${encodeURIComponent(ip)}" target="_blank" rel="noopener">CrowdSec CTI ↗</a>
         <a class="btn" href="https://www.abuseipdb.com/check/${encodeURIComponent(ip)}" target="_blank" rel="noopener">AbuseIPDB ↗</a>
       </span>
@@ -621,6 +624,11 @@ $("#theme").onclick = () => {
   document.documentElement.dataset.theme = next; store.set("theme", next); render();
 };
 { const t = store.get("theme", ""); if (t) document.documentElement.dataset.theme = t; }
+
+view.addEventListener("click", (e) => {
+  const card = e.target.closest("[data-href]");
+  if (card && card.dataset.href.startsWith("#/")) location.hash = card.dataset.href;
+});
 
 let resizeT;
 addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(render, 250); });

@@ -173,7 +173,7 @@ def requests(host, status_f, ip, q, limit, before_id) -> list[dict]:
     if ip:
         where.append("client_ip = ?"); params.append(ip)
     if status_f:
-        if status_f.endswith("xx"):
+        if len(status_f) == 3 and status_f.endswith("xx") and status_f[0] in "12345":
             lo = int(status_f[0]) * 100
             where.append("status BETWEEN ? AND ?"); params += [lo, lo + 99]
         elif status_f == "auth":
@@ -197,8 +197,8 @@ def firewall(ip, crowdsec_only, port, limit, before_id) -> list[dict]:
         where.append("src_ip = ?"); params.append(ip)
     if crowdsec_only:
         where.append("crowdsec = 1")
-    if port:
-        where.append("dst_port = ?"); params.append(int(port))
+    if port is not None:
+        where.append("dst_port = ?"); params.append(port)
     if before_id:
         where.append("id < ?"); params.append(before_id)
     params.append(limit)

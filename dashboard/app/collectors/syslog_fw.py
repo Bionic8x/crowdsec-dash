@@ -22,6 +22,7 @@ A drop is tagged "crowdsec" when the source IP currently has a CrowdSec decision
 "the firewall actually blocked this banned IP N times".
 """
 import asyncio
+import ipaddress
 import logging
 import re
 from datetime import datetime, timedelta
@@ -91,14 +92,44 @@ def syslog_time(msg: str) -> str:
     return now_iso()
 
 
+MAX_BUFFER = 50_000  # rows held in memory while the database is unavailable
+
+
+def _allowed_nets():
+    nets = []
+    for c in settings.syslog_allowed_sources:
+        try:
+            nets.append(ipaddress.ip_network(c, strict=False))
+        except ValueError:
+            log.warning("ignoring bad SYSLOG_ALLOWED_SOURCES entry %r", c)
+    return nets
+
+
 class Receiver(asyncio.DatagramProtocol):
     def __init__(self):
         self.buffer: list[tuple] = []
         self.packets = 0
         self.kept = 0
         self.unparsed = 0
+        self.rejected = 0  # from a sender not in SYSLOG_ALLOWED_SOURCES
+        self.dropped = 0   # buffer overflow
+        self.allowed = _allowed_nets()
+
+    def sender_allowed(self, host: str) -> bool:
+        if not self.allowed:
+            return True
+        try:
+            a = ipaddress.ip_address(host)
+        except ValueError:
+            return False
+        if a.version == 6 and a.ipv4_mapped:
+            a = a.ipv4_mapped
+        return any(a in n for n in self.allowed)
 
     def datagram_received(self, data: bytes, addr):
+        if not self.sender_allowed(addr[0]):
+            self.rejected += 1
+            return
         self.packets += 1
         msg = data.decode("utf-8", "replace")
         csv = extract_csv(msg)
@@ -114,6 +145,9 @@ class Receiver(asyncio.DatagramProtocol):
             return
         if settings.fw_ignore_private_src and geoip.is_private(rec["src"]):
             return
+        if len(self.buffer) >= MAX_BUFFER:
+            self.dropped += 1
+            return
         cs = int(active_index.contains(rec["src"]) or (rec["label"] in settings.fw_crowdsec_labels))
         geo = geoip.lookup(rec["src"])
         self.buffer.append((
@@ -122,12 +156,23 @@ class Receiver(asyncio.DatagramProtocol):
         ))
         self.kept += 1
 
-    def flush(self):
+    def take(self) -> list[tuple]:
+        """Called on the event loop thread, the same thread that appends, so nothing is lost in between."""
         rows, self.buffer = self.buffer, []
-        db.executemany(
-            "INSERT INTO fw_events(ts,action,iface,dir,proto,src_ip,src_port,dst_ip,dst_port,label,crowdsec,country,lat,lon) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows,
-        )
+        return rows
+
+    def put_back(self, rows: list[tuple]):
+        """The write failed: keep the rows for the next flush (oldest first), within MAX_BUFFER."""
+        merged = rows + self.buffer
+        self.dropped += max(0, len(merged) - MAX_BUFFER)
+        self.buffer = merged[-MAX_BUFFER:]
+
+
+def write_rows(rows: list[tuple]):
+    db.executemany(
+        "INSERT INTO fw_events(ts,action,iface,dir,proto,src_ip,src_port,dst_ip,dst_port,label,crowdsec,country,lat,lon) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows,
+    )
 
 
 async def run():
@@ -141,12 +186,16 @@ async def run():
     except OSError as e:
         status.fail("syslog", f"cannot listen on udp/{settings.syslog_port}: {e}")
         return
-    status.ok("syslog", listening=f"udp/{settings.syslog_port}")
+    status.ok("syslog", listening=f"udp/{settings.syslog_port}",
+              allowed_sources=settings.syslog_allowed_sources or "anyone (set SYSLOG_ALLOWED_SOURCES)")
     while True:
         await asyncio.sleep(1)
+        rows = receiver.take()
         try:
-            await asyncio.to_thread(receiver.flush)
-            if receiver.packets:
-                status.ok("syslog", packets=receiver.packets, kept=receiver.kept, unparsed=receiver.unparsed)
+            await asyncio.to_thread(write_rows, rows)
+            if receiver.packets or receiver.rejected:
+                status.ok("syslog", packets=receiver.packets, kept=receiver.kept, unparsed=receiver.unparsed,
+                          rejected_senders=receiver.rejected, dropped=receiver.dropped)
         except Exception as e:
+            receiver.put_back(rows)
             status.fail("syslog", e)

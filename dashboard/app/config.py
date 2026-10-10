@@ -47,10 +47,17 @@ class Settings:
     npm_log_glob = os.environ.get("NPM_LOG_GLOB", "proxy-host-*_access.log")
     npm_backfill_bytes = _int("NPM_BACKFILL_BYTES", 2_000_000)  # read this much history on first start
     npm_ignore_hosts = _list("NPM_IGNORE_HOSTS")
+    # query-string parameters whose values are replaced with "REDACTED" before storing (case-insensitive)
+    npm_redact_params = [p.lower() for p in _list(
+        "NPM_REDACT_PARAMS",
+        "api_key,apikey,x-emby-token,x-mediabrowser-token,token,access_token,refresh_token,id_token,auth,"
+        "authorization,password,passwd,pwd,pass,secret,key,sig,signature,session,sessionid,sid,code,ticket,otp",
+    )]
 
     # --- OPNsense firewall log (syslog) ------------------------------------
     syslog_enabled = _bool("SYSLOG_ENABLED", True)
     syslog_port = _int("SYSLOG_PORT", 5514)
+    syslog_allowed_sources = _list("SYSLOG_ALLOWED_SOURCES")  # IPs/CIDRs allowed to send syslog. empty = anyone
     fw_actions = _list("FW_ACTIONS", "block")          # which filterlog actions to keep
     fw_interfaces = _list("FW_INTERFACES")             # e.g. "igb0" (WAN). empty = all
     fw_ignore_private_src = _bool("FW_IGNORE_PRIVATE_SRC", True)
@@ -70,7 +77,12 @@ class Settings:
     port = _int("PORT", 8088)
     dash_user = os.environ.get("DASH_USER", "")
     dash_password = os.environ.get("DASH_PASSWORD", "")
+    allow_no_auth = _bool("ALLOW_NO_AUTH", False)  # must be set to run without DASH_PASSWORD
+    # Host names the dashboard answers to (besides IP addresses and localhost). Blocks DNS rebinding.
+    # Comma separated, "*.example.com" wildcards allowed, "*" disables the check.
+    allowed_hosts = _list("ALLOWED_HOSTS")
     allow_write = _bool("ALLOW_WRITE", False)  # enables Ban / Unban buttons
+    ban_durations = _list("BAN_DURATIONS", "1h,4h,24h,168h")  # what the Ban form may ask for
     lan_cidrs = _list(
         "LAN_CIDRS",
         "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,100.64.0.0/10,fc00::/7,fe80::/10,::1/128",

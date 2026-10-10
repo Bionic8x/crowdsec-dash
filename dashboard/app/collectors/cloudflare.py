@@ -30,6 +30,7 @@ import requests
 from .. import status
 from ..config import settings
 from ..db import db, iso, now_iso, utcnow
+from ..timeutil import norm_ts
 
 log = logging.getLogger("cloudflare")
 API = "https://api.cloudflare.com/client/v4"
@@ -140,7 +141,7 @@ GQL = """
 query ($zone: string, $since: Time) {
   viewer {
     zones(filter: {zoneTag: $zone}) {
-      firewallEventsAdaptive(filter: {datetime_gt: $since}, limit: 1000, orderBy: [datetime_ASC]) {
+      firewallEventsAdaptive(filter: {datetime_geq: $since}, limit: 1000, orderBy: [datetime_ASC]) {
         datetime action source clientIP clientCountryName clientRequestHTTPHost
         clientRequestPath clientRequestHTTPMethodName userAgent ruleId rayName
       }
@@ -151,10 +152,15 @@ query ($zone: string, $since: Time) {
 
 
 def fetch_events(zones):
-    since = db.get_kv("cf_events_since") or iso(utcnow() - timedelta(hours=6))
-    newest = since
+    """Each zone keeps its own cursor: a query returns at most 1000 events, so one busy zone
+    may still be catching up while another is current. The cursor is inclusive (datetime_geq)
+    and rows are de-duplicated by ray id, so events sharing the cursor's second aren't lost."""
+    default_since = db.get_kv("cf_events_since") or iso(utcnow() - timedelta(hours=6))  # pre-per-zone state
     total = 0
     for z in zones:
+        key = f"cf_events_since:{z['id']}"
+        since = db.get_kv(key) or default_since
+        newest = since
         r = requests.post(
             f"{API}/graphql",
             headers={"Authorization": f"Bearer {settings.cf_api_token}"},
@@ -168,18 +174,21 @@ def fetch_events(zones):
         events = zl[0]["firewallEventsAdaptive"] if zl else []
         rows = []
         for e in events:
+            ts = norm_ts(e["datetime"]) or now_iso()
             rows.append((
-                e["rayName"], e["datetime"].replace(".000", ""), e["action"], e["source"], e["clientIP"],
+                e["rayName"], ts, e["action"], e["source"], e["clientIP"],
                 e["clientCountryName"], e["clientRequestHTTPHost"], e["clientRequestPath"],
                 e["clientRequestHTTPMethodName"], e["userAgent"], e["ruleId"],
             ))
-            newest = max(newest, e["datetime"])
+            newest = max(newest, ts)
         db.executemany(
             "INSERT OR IGNORE INTO cf_events(ray,ts,action,source,ip,country,host,path,method,ua,rule_id) "
             "VALUES(?,?,?,?,?,?,?,?,?,?,?)", rows,
         )
+        if len(events) >= 1000:
+            log.info("cloudflare: %s has more than 1000 new events; the rest arrive on the next polls", z["name"])
+        db.set_kv(key, newest)
         total += len(rows)
-    db.set_kv("cf_events_since", newest)
     return total
 
 
