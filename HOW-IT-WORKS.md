@@ -50,7 +50,7 @@ NPM's log only shows method, URL and status code, so a login scenario works when
 |---|---|---|
 | `local/jellyfin-npm-bf` | `POST /Users/authenticatebyname` → 401/403 | slow guessing |
 | `local/komga-npm-bf` | `/api/v2/users/me…` → 401 | Komga logs in with a **GET** + HTTP Basic, invisible to the POST-only stock scenarios. Other 401s (OPDS readers, `/sse`) are normal and ignored. |
-| `local/seerr-npm-bf` | `POST /api/v1/auth/…` → 401/403 | slow guessing (local login answers 403, Jellyfin login 401). `GET /api/v1/auth/me` 403s on every logged-out page load, so only POSTs count. |
+| `local/seerr-npm-bf` | `POST /api/v1/auth/…` → 401/403 | slow guessing (local login answers 403, Jellyfin login 401). `GET /api/v1/auth/me` answers 401/403 on every logged-out page load, so only POSTs count. |
 | `local/audiobookshelf-npm-bf` | `POST …/login` → 401 | slow guessing. Token refreshes (`/auth/refresh`) can 401 legitimately and don't count. |
 
 To check another app: enter a wrong password once and look at the status of your request on the **Proxy traffic** page. A 401/403 `POST` is caught by the stock scenarios; anything else (a `GET`, or 200/302/400) needs its own scenario like these.

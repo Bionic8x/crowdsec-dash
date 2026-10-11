@@ -17,17 +17,22 @@ Assumed addresses (swap in yours):
 The CrowdSec plugin's LAPI listens on `127.0.0.1:8080` by default, so only OPNsense itself can reach it.
 
 1. **Services › CrowdSec › Settings**: set the **LAPI listen address** to `192.168.1.1` (keep port `8080`). Click **Apply**.
-2. **Firewall › Rules › LAN**: add a *pass* rule, protocol TCP, source `192.168.1.20` (Unraid), destination **This Firewall**, port `8080`.
+2. **Firewall › Rules › LAN**: add a *pass* rule, protocol TCP, source `192.168.1.20` (Unraid), destination **This Firewall**, port `8080`. Save, then **Apply changes**.
+3. Make sure CrowdSec really moved to the new address. Over SSH on OPNsense (**System › Settings › Administration › Secure Shell**, or console option 8):
+   ```sh
+   sockstat -4l | grep 8080
+   ```
+   If it still shows `127.0.0.1:8080`, run `service crowdsec restart` and check again.
 
 **Check.** From the Unraid terminal:
 ```sh
-curl -s http://192.168.1.1:8080/v1/heartbeat
+curl -v --max-time 5 http://192.168.1.1:8080/v1/heartbeat
 ```
-You should get a small JSON error (401, something like "token is empty"). That's good: the LAPI answered. A timeout means the rule or the listen address is wrong.
+You should get `401` and a small JSON error ("cookie token is empty"). That's good: the LAPI answered. A timeout means the rule or the listen address is wrong (OPNsense silently drops connections to ports nothing listens on, so both look the same).
 
 ## 2. Create two machine accounts on OPNsense
 
-SSH into OPNsense (or use **Diagnostics › Command Prompt**). Generate two passwords and register them:
+SSH into OPNsense. Generate two passwords and register them:
 
 ```sh
 openssl rand -hex 24          # run twice, keep both outputs
@@ -94,7 +99,7 @@ Open **http://192.168.1.20:8088** and go to the **Status** page. Each collector 
 
 For an orange-cloud host, NPM's log shows **Cloudflare's** IP as the client unless NPM is told to trust Cloudflare's header. The dashboard flags this in red on the Overview and Hosts pages ("Real IP: not restored").
 
-NPM already loads Cloudflare's IP ranges as trusted proxies (`set_real_ip_from`). It just reads the wrong header. For each proxied host, open **Edit Proxy Host › Advanced** and add:
+NPM already loads Cloudflare's IP ranges as trusted proxies (`set_real_ip_from`). It just reads the wrong header. For each proxied host, open **Edit Proxy Host › Advanced** (in NPM 2.13+ that's the **gear icon** next to the SSL tab, *Custom Nginx Configuration*) and add:
 
 ```nginx
 real_ip_header CF-Connecting-IP;

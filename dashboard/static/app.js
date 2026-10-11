@@ -476,7 +476,7 @@ pages.hosts = async () => {
     ${cf.last_error ? `<div class="note bad"><b>Cloudflare:</b> ${esc(cf.last_error)}</div>` : ""}
     <div class="note info"><b>Why this matters:</b> OPNsense can only block IPs that connect to your WAN directly.
       For <span class="badge b-good">DNS only</span> hosts that works. For <span class="badge b-cf">Cloudflare proxied</span> hosts, the attacker talks to Cloudflare
-      and Cloudflare talks to you, so a firewall ban never applies. Those need a Cloudflare-side remediation (e.g. the CrowdSec Cloudflare bouncer or a WAF rule).</div>
+      and Cloudflare talks to you, so a firewall ban never applies. The NPM bouncer (SETUP.md step 9) blocks them inside NPM instead, as long as the host restores real IPs.</div>
     <div class="card"><h2>Proxy hosts <span class="sub">${rangeLabel()}</span></h2>
     ${table([
       { h: "Host", v: (r) => (r.n ? `<a href="#/traffic?host=${encodeURIComponent(r.host)}">${esc(r.host)}</a>` : `<span class="ink2">${esc(r.host)}</span>`) },
