@@ -44,6 +44,17 @@ Files: `crowdsec/acquis.d/npm.yaml`, `crowdsec/scenarios/jellyfin-npm-bf.yaml`
 
 Open `jellyfin-npm-bf.yaml` next to a failed-login line in an NPM log. One 401 puts one drop in a 5-drop bucket that leaks once a minute, so it's nowhere near a ban. A script trying passwords overflows it in seconds.
 
+NPM's log only shows method, URL and status code, so a login scenario works when the app answers a wrong password with a distinctive status. The stock `http-generic-401-bf` / `403-bf` scenarios count any `POST` answered 401/403, but leak one every 10 seconds, so a script guessing every ~15 s never trips them. The custom scenarios, all in `crowdsec/scenarios/`, leak once a minute and match each app's real login request (taken from the apps' source code):
+
+| Scenario | Counts | Why it's needed |
+|---|---|---|
+| `local/jellyfin-npm-bf` | `POST /Users/authenticatebyname` → 401/403 | slow guessing |
+| `local/komga-npm-bf` | `/api/v2/users/me…` → 401 | Komga logs in with a **GET** + HTTP Basic, invisible to the POST-only stock scenarios. Other 401s (OPDS readers, `/sse`) are normal and ignored. |
+| `local/seerr-npm-bf` | `POST /api/v1/auth/…` → 401/403 | slow guessing (local login answers 403, Jellyfin login 401). `GET /api/v1/auth/me` 403s on every logged-out page load, so only POSTs count. |
+| `local/audiobookshelf-npm-bf` | `POST …/login` → 401 | slow guessing. Token refreshes (`/auth/refresh`) can 401 legitimately and don't count. |
+
+To check another app: enter a wrong password once and look at the status of your request on the **Proxy traffic** page. A 401/403 `POST` is caught by the stock scenarios; anything else (a `GET`, or 200/302/400) needs its own scenario like these.
+
 ## 2. The dashboard's collectors
 
 All in `dashboard/app/collectors/`. Each is an `async def run()` loop started from `main.py`. Blocking work (HTTP calls, SQLite) goes to a thread with `asyncio.to_thread`.

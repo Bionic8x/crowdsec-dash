@@ -18,7 +18,7 @@ crowdsec-dash/
 ├── HOW-IT-WORKS.md         walkthrough of the architecture and the code
 ├── crowdsec/               config for the Unraid CrowdSec agent
 │   ├── acquis.d/npm.yaml           which logs to read
-│   ├── scenarios/jellyfin-npm-bf.yaml   example custom scenario
+│   ├── scenarios/          login brute force: Jellyfin, Komga, Seerr, Audiobookshelf
 │   └── parsers/cloudflare-whitelist.yaml   never ban Cloudflare edges
 ├── dashboard/              the app (Python + Starlette, vanilla JS + d3)
 │   ├── app/main.py         web server, routes, starts collectors

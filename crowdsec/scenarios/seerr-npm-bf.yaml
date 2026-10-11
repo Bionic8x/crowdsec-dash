@@ -1,0 +1,30 @@
+# Seerr (Jellyseerr/Overseerr) login brute force, seen in Nginx Proxy Manager access logs.
+#
+# All Seerr sign-ins are POSTs under /api/v1/auth/:
+#   /api/v1/auth/local     Seerr password    -> 403 "Access denied." when wrong
+#   /api/v1/auth/jellyfin  Jellyfin account  -> 401 when Jellyfin rejects the password
+#   /api/v1/auth/plex      Plex account
+# The generic 401/403 scenarios catch fast attempts; this one also catches a slow script
+# (one guess every 15-60 s). GET /api/v1/auth/me answers 403 on every logged-out page load,
+# which is why only POSTs count.
+type: leaky
+name: local/seerr-npm-bf
+description: "Seerr login brute force, seen in Nginx Proxy Manager access logs"
+filter: >-
+  evt.Meta.log_type == 'http_access-log'
+  && evt.Meta.http_verb == 'POST'
+  && evt.Meta.http_path startsWith '/api/v1/auth/'
+  && evt.Meta.http_status in ['401', '403']
+groupby: evt.Meta.source_ip
+capacity: 5
+leakspeed: 1m
+blackhole: 5m
+labels:
+  service: seerr
+  confidence: 3
+  spoofable: 0
+  classification:
+    - attack.T1110
+  label: "Seerr brute force"
+  behavior: "http:bruteforce"
+  remediation: true

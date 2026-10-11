@@ -1,0 +1,32 @@
+# Komga login brute force, seen in Nginx Proxy Manager access logs.
+#
+# Komga's web login is not a POST: the page sends GET /api/v2/users/me with HTTP Basic
+# credentials (plus ?remember-me=...) and a wrong password answers 401. The generic
+# http-generic-401-bf scenario only counts POSTs, so without this Komga isn't covered.
+#
+# Only the login request is counted. Other harmless 401s are ignored on purpose:
+#   - the page checks /api/v2/users/me once without credentials when you're logged out
+#     (one 401 per visit; well under the threshold),
+#   - OPDS readers (/opds/...) and the live-update stream (/sse/...) get 401 challenges
+#     as part of normal operation.
+# More than 5 failures, leaking one per minute: a few typos never trip it, a script does.
+type: leaky
+name: local/komga-npm-bf
+description: "Komga login brute force, seen in Nginx Proxy Manager access logs"
+filter: >-
+  evt.Meta.log_type == 'http_access-log'
+  && evt.Meta.http_path startsWith '/api/v2/users/me'
+  && evt.Meta.http_status == '401'
+groupby: evt.Meta.source_ip
+capacity: 5
+leakspeed: 1m
+blackhole: 5m
+labels:
+  service: komga
+  confidence: 3
+  spoofable: 0
+  classification:
+    - attack.T1110
+  label: "Komga brute force"
+  behavior: "http:bruteforce"
+  remediation: true

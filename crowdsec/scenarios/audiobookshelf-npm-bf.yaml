@@ -1,0 +1,28 @@
+# Audiobookshelf login brute force, seen in Nginx Proxy Manager access logs.
+#
+# The web UI and the mobile apps sign in with POST /login, which answers 401 for a wrong
+# username or password. (endsWith also covers a sub-path install such as /audiobookshelf/login.)
+# Audiobookshelf has its own limiter too (429 after 40 attempts per 10 minutes, per IP);
+# this bans much earlier, and also catches a slow script the generic 401 scenario misses.
+# Token refreshes (POST /auth/refresh) can 401 for legitimate reasons, so they don't count.
+type: leaky
+name: local/audiobookshelf-npm-bf
+description: "Audiobookshelf login brute force, seen in Nginx Proxy Manager access logs"
+filter: >-
+  evt.Meta.log_type == 'http_access-log'
+  && evt.Meta.http_verb == 'POST'
+  && evt.Meta.http_path endsWith '/login'
+  && evt.Meta.http_status == '401'
+groupby: evt.Meta.source_ip
+capacity: 5
+leakspeed: 1m
+blackhole: 5m
+labels:
+  service: audiobookshelf
+  confidence: 3
+  spoofable: 0
+  classification:
+    - attack.T1110
+  label: "Audiobookshelf brute force"
+  behavior: "http:bruteforce"
+  remediation: true

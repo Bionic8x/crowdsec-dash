@@ -49,6 +49,11 @@ $C run --rm opnsense --count 30                   # firewall drops, kept
 $C run --rm rogue --count 25                      # same packets from a non-allowed sender, rejected
 $C run --rm opnsense --count 7 --src 203.0.113.50 # drops from the banned IP, tagged "CrowdSec"
 $C exec -T lapi cscli decisions list              # what the LAPI thinks is banned
+
+# login scenarios (APP: komga | seerr-local | seerr-jellyfin | abs)
+$C run --rm npm login-fail komga 198.51.100.11 8 15   # slow attack: 8 guesses, 15 s apart -> banned
+$C run --rm npm login-noise komga 198.51.100.21       # normal use with harmless 401s -> no ban
+$C exec -T lapi cscli alerts list
 ```
 
 ## 4. Optional: the NPM bouncer against a real, stock NPM

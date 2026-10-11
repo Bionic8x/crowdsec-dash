@@ -64,7 +64,11 @@ services:
         crowdsecurity/http-cve
     volumes:
       - ./crowdsec/acquis.d:/etc/crowdsec/acquis.d:ro
+      # custom login brute-force scenarios (one file each: mounting the whole folder would hide the hub's)
       - ./crowdsec/scenarios/jellyfin-npm-bf.yaml:/etc/crowdsec/scenarios/jellyfin-npm-bf.yaml:ro
+      - ./crowdsec/scenarios/komga-npm-bf.yaml:/etc/crowdsec/scenarios/komga-npm-bf.yaml:ro
+      - ./crowdsec/scenarios/seerr-npm-bf.yaml:/etc/crowdsec/scenarios/seerr-npm-bf.yaml:ro
+      - ./crowdsec/scenarios/audiobookshelf-npm-bf.yaml:/etc/crowdsec/scenarios/audiobookshelf-npm-bf.yaml:ro
       - ./crowdsec/parsers/cloudflare-whitelist.yaml:/etc/crowdsec/parsers/s02-enrich/cloudflare-whitelist.yaml:ro
       - crowdsec-agent-data:/var/lib/crowdsec/data
       - crowdsec-agent-config:/etc/crowdsec
