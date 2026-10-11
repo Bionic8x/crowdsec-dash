@@ -4,10 +4,12 @@
 #   2. fix the NPM log path below (NPM_LOGS in .env)
 #   3. docker compose up -d --build
 #
-# Two containers:
+# Containers:
 #   crowdsec-agent  reads NPM's access logs, detects attacks, and reports them to the
 #                   LAPI on OPNsense. It does no blocking itself; OPNsense does.
 #   crowdsec-dash   the dashboard: reads LAPI + NPM logs + OPNsense syslog.
+#   npm-bouncer     OPTIONAL (COMPOSE_PROFILES=npm-bouncer): also blocks banned IPs inside
+#                   NPM, which covers Cloudflare-proxied hosts the firewall can't. SETUP.md step 9.
 
 services:
   crowdsec-dash:
@@ -40,6 +42,7 @@ services:
     volumes:
       - ./data:/data
       - ${NPM_LOGS}:/npm-logs:ro
+      - bouncer-status:/bouncer-status:ro    # npm-bouncer's status, shown on the Status page
 
   crowdsec-agent:
     # "latest" picks up new CrowdSec releases (incl. security fixes) whenever the image is pulled:
@@ -67,6 +70,34 @@ services:
       - crowdsec-agent-config:/etc/crowdsec
       - ${NPM_LOGS}:/var/log/npm:ro
 
+  # Blocks banned IPs in Nginx Proxy Manager (403), using NPM's own custom-config hooks:
+  # works with the stock jc21 image. Off unless COMPOSE_PROFILES=npm-bouncer is set in .env.
+  npm-bouncer:
+    build: ./npm-bouncer
+    container_name: crowdsec-npm-bouncer
+    profiles: ["npm-bouncer"]
+    restart: unless-stopped
+    # Share NPM's process list so we can tell its nginx to reload (no Docker socket needed).
+    # Must be NPM's container name as shown by `docker ps`.
+    pid: "container:${NPM_CONTAINER:-Nginx-Proxy-Manager-Official}"
+    # Root, but with only these capabilities. Having fewer capabilities than NPM's processes
+    # also means the kernel won't let this container read NPM's memory, environment or files.
+    cap_drop: [ALL]
+    cap_add: [KILL, DAC_OVERRIDE]   # signal nginx; write into NPM's custom-config folder
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    environment:
+      TZ: ${TZ:-America/New_York}
+      LAPI_URL: ${LAPI_URL}
+      BOUNCER_API_KEY: ${NPM_BOUNCER_API_KEY:-}      # cscli bouncers add npm-bouncer (on OPNsense)
+      INCLUDE_ORIGINS: ${NPM_BOUNCER_ORIGINS:-crowdsec,cscli}   # "all" adds community blocklists
+      NPM_CUSTOM_DIR: /npm-custom
+      NGINX_CUSTOM_PATH: /data/nginx/custom          # the same folder as NPM itself sees it
+    volumes:
+      - ${NPM_DATA:-./npm-data-not-set}/nginx/custom:/npm-custom
+      - bouncer-status:/status
+
 volumes:
   crowdsec-agent-data:
   crowdsec-agent-config:
+  bouncer-status:

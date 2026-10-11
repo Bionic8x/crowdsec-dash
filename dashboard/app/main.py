@@ -12,9 +12,11 @@ import asyncio
 import base64
 import contextlib
 import ipaddress
+import json
 import logging
 import os
 import secrets
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from starlette.applications import Starlette
@@ -87,9 +89,28 @@ async def health(request):
     return j({"status": "ok"})
 
 
+def npm_bouncer_status() -> dict:
+    """The optional npm-bouncer container writes its state to a shared volume; show it like a collector."""
+    try:
+        with open(settings.npm_bouncer_status_file) as f:
+            st = json.load(f)
+        updated = datetime.fromisoformat(st["updated"].replace("Z", "+00:00"))
+    except (OSError, ValueError, KeyError):
+        return {"enabled": False, "ok": None, "last_ok": None, "last_error": None,
+                "info": {"note": "not running (optional: blocks banned IPs inside NPM, SETUP.md step 9)"}}
+    age = (datetime.now(timezone.utc) - updated).total_seconds()
+    error = f"no update for {int(age)}s: is crowdsec-npm-bouncer running?" if age > 120 else st.get("error")
+    ok = bool(st.get("ok")) and not error
+    labels = {"banned": "IPs blocked in NPM", "skipped": "skipped (LAN / Cloudflare / invalid)",
+              "last_reload": "last nginx reload", "origins": "decision origins"}
+    info = {label: st[k] for k, label in labels.items() if st.get(k) is not None}
+    return {"enabled": True, "ok": ok, "last_ok": st["updated"] if ok else None,
+            "last_error": f"{st['updated']}  {error}" if error else None, "info": info}
+
+
 async def api_status(request):
     return j({
-        "collectors": status.status,
+        "collectors": {**status.status, "npm_bouncer": npm_bouncer_status()},
         "counts": await run_q(queries.counts),
         "config": {
             "lapi_url": settings.lapi_url, "lapi_machine_id": settings.lapi_machine_id,

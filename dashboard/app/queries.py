@@ -123,6 +123,11 @@ def geo_points(rng: str, layer: str) -> dict:
     return {"layer": layer, "points": pts, "countries": countries}
 
 
+# A 403 that NPM produced itself (no upstream answered): the npm-bouncer (or an NPM access list)
+# stopped the request before it reached the app.
+_BLOCKED_AT_NPM = "(n.status = 403 AND COALESCE(n.upstream_status, '-') = '-')"
+
+
 # ---------------------------------------------------------------------------
 def decisions(state: str, q: str, limit: int) -> list[dict]:
     now = now_iso()
@@ -140,7 +145,9 @@ def decisions(state: str, q: str, limit: int) -> list[dict]:
                (SELECT COUNT(*) FROM fw_events f WHERE f.src_ip = d.value AND f.ts >= d.created_at
                     AND (d.until > :now OR f.ts <= d.until)) fw_hits,
                (SELECT COUNT(*) FROM npm_requests n WHERE n.client_ip = d.value AND n.ts > d.created_at
-                    AND (d.until > :now OR n.ts <= d.until)) npm_after
+                    AND (d.until > :now OR n.ts <= d.until) AND NOT {_BLOCKED_AT_NPM}) npm_after,
+               (SELECT COUNT(*) FROM npm_requests n WHERE n.client_ip = d.value AND n.ts > d.created_at
+                    AND (d.until > :now OR n.ts <= d.until) AND {_BLOCKED_AT_NPM}) npm_blocked
         FROM decisions d LEFT JOIN alerts a ON a.id = d.alert_id
         {'WHERE ' + ' AND '.join(where) if where else ''}
         ORDER BY d.created_at DESC LIMIT :lim"""

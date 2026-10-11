@@ -33,6 +33,36 @@ services:
   crowdsec-agent:
     depends_on: [lapi]
 
+  # A real, stock Nginx Proxy Manager for the npm-bouncer test (profile npm-bouncer).
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: csdtest-npm
+    profiles: ["npm-bouncer"]
+    volumes:
+      - npm-data:/data
+      - npm-letsencrypt:/etc/letsencrypt     # NPM refuses to start without it
+    networks:
+      default:
+        ipv4_address: 172.31.99.30
+
+  npm-bouncer:
+    depends_on: [lapi, nginx-proxy-manager]
+    pid: "service:nginx-proxy-manager"      # replaces container:<name> from the main file
+    environment:
+      NPM_CUSTOM_DIR: /npm-custom/nginx/custom
+      POLL_SECONDS: "5"
+      RELOAD_MIN_SECONDS: "5"
+    volumes:
+      - npm-data:/npm-custom                 # same target as the main file, so it replaces the bind mount
+
+  # Sends a request through NPM as if it came via Cloudflare from a given visitor IP.
+  probe:
+    image: python:3.12-slim
+    profiles: ["tools"]
+    volumes:
+      - ./test/tools:/tools:ro
+    entrypoint: ["python", "/tools/probe.py"]
+
   # --- helper tools, run on demand with `docker compose ... run --rm <name> ...` -------------
   # Stands in for Nginx Proxy Manager: writes access-log lines into the shared log volume.
   npm:
@@ -69,6 +99,8 @@ volumes:
   npmlogs:        # NPM_LOGS=npmlogs in .env.test points both containers' log mounts here
   lapi-data:
   lapi-config:
+  npm-data:       # the test NPM's /data
+  npm-letsencrypt:
 
 networks:
   default:

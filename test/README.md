@@ -51,9 +51,31 @@ $C run --rm opnsense --count 7 --src 203.0.113.50 # drops from the banned IP, ta
 $C exec -T lapi cscli decisions list              # what the LAPI thinks is banned
 ```
 
-## 4. Clean up
+## 4. Optional: the NPM bouncer against a real, stock NPM
+
+Add `NPM_BOUNCER_API_KEY` and `NPM_TEST_ADMIN_PASSWORD` (random values) to `test/.env.test`, and add
+`--profile npm-bouncer` to `$C`.
 
 ```sh
-$C --profile tools down -v      # containers, network and volumes
+$C up -d nginx-proxy-manager
+$C exec -T lapi cscli bouncers add npm-bouncer --key "$NPM_BOUNCER_API_KEY"
+# NPM 2.13+ has no default login: create the first admin, then a proxy host app.test -> the dashboard,
+# with the real-IP line from SETUP.md step 6 as its advanced config
+api() { $C exec -T nginx-proxy-manager curl -s -X "$1" "http://127.0.0.1:81/api$2" \
+          -H 'Content-Type: application/json' ${TOKEN:+-H "Authorization: Bearer $TOKEN"} ${3:+-d "$3"}; }
+api POST /users "{\"name\":\"Test Admin\",\"nickname\":\"admin\",\"email\":\"admin@example.test\",\"roles\":[\"admin\"],\"is_disabled\":false,\"auth\":{\"type\":\"password\",\"secret\":\"$NPM_TEST_ADMIN_PASSWORD\"}}"
+TOKEN=$(api POST /tokens "{\"identity\":\"admin@example.test\",\"secret\":\"$NPM_TEST_ADMIN_PASSWORD\"}" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+api POST /nginx/proxy-hosts '{"domain_names":["app.test"],"forward_scheme":"http","forward_host":"crowdsec-dash","forward_port":8088,"access_list_id":0,"certificate_id":0,"ssl_forced":false,"caching_enabled":false,"block_exploits":false,"advanced_config":"real_ip_header CF-Connecting-IP;","meta":{},"allow_websocket_upgrade":false,"http2_support":false,"hsts_enabled":false,"hsts_subdomains":false,"locations":[]}'
+$C up -d --build npm-bouncer
+
+$C run --rm npm bruteforce 203.0.113.50 10        # get it banned
+$C run --rm probe 203.0.113.50 81.2.69.142        # through NPM "via Cloudflare": expect 403, then 200
+$C exec -T nginx-proxy-manager cat /data/nginx/custom/crowdsec-bans.map
+```
+
+## 5. Clean up
+
+```sh
+$C --profile tools --profile npm-bouncer down -v      # containers, network and volumes
 rm -rf test/data
 ```

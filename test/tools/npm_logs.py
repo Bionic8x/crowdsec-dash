@@ -4,6 +4,7 @@ Write Nginx Proxy Manager style access-log lines (NPM's "proxy" log_format) for 
   npm_logs.py <dir> seed               create proxy-host-{1,2}_access.log with normal traffic
   npm_logs.py <dir> traffic [N]        append N normal requests
   npm_logs.py <dir> bruteforce IP [N]  append N failed Jellyfin logins from IP (default 10)
+  npm_logs.py <dir> raw HOST_ID        append stdin as-is (e.g. real lines from a test NPM)
 """
 import os
 import random
@@ -58,6 +59,10 @@ def main():
             lines.append(line(401, "POST", HOSTS[1], "/Users/authenticatebyname", ip, 25))
         append(d, 1, lines)
         print(f"appended {n} failed Jellyfin logins from {ip}")
+    elif cmd == "raw":
+        lines = [ln if ln.endswith("\n") else ln + "\n" for ln in sys.stdin if ln.strip()]
+        append(d, int(args[0]), lines)
+        print(f"appended {len(lines)} raw lines to proxy-host-{args[0]}")
     else:
         sys.exit(__doc__)
 

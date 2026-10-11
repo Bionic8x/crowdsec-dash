@@ -317,8 +317,8 @@ pages.decisions = async (params) => {
   const write = state.status?.config?.allow_write;
   view.innerHTML = `
     <div class="note info">A <b>decision</b> is CrowdSec's verdict ("ban this IP for 4h"). Your OPNsense firewall bouncer pulls these and blocks them in pf.
-      <b>FW hits</b> counts packets OPNsense dropped from that IP while banned. <b>Requests after ban</b> &gt; 0 means traffic still reached NPM anyway,
-      usually because the site is behind Cloudflare (Cloudflare connects to you, not the attacker).</div>
+      <b>FW hits</b> counts packets OPNsense dropped from that IP while banned. <b>Requests after ban</b> &gt; 0 means traffic still reached the app anyway,
+      usually because the site is behind Cloudflare (Cloudflare connects to you, not the attacker). <b>blocked</b> = stopped inside NPM by the NPM bouncer.</div>
     <div class="card">
       <h2><span class="filters">
         <span class="seg" id="st"><button data-s="active">Active</button><button data-s="expired">Expired</button><button data-s="all">All</button></span>
@@ -335,9 +335,10 @@ pages.decisions = async (params) => {
         { h: "Banned", v: (r) => when(r.created_at) },
         { h: "Expires", v: (r) => (r.active ? when(r.until) : `<span class="muted">${ago(r.until)}</span>`) },
         { h: "FW hits", cls: "num", v: (r) => num(r.fw_hits) },
-        { h: "Requests after ban", cls: "num", v: (r) => r.npm_after ? `<span class="badge b-warn" title="${r.host_proxied
-            ? "Expected: this host is behind Cloudflare, so the firewall ban can't stop it"
-            : "Requests reached NPM after the ban. If this host is DNS-only, check the bouncer (or the requests came from inside your LAN)"}">${num(r.npm_after)}</span>` : "0" },
+        { h: "Requests after ban", cls: "num", v: (r) => (r.npm_after ? `<span class="badge b-warn" title="${r.host_proxied
+            ? "Reached the app: this host is behind Cloudflare, so the firewall ban can't stop it. The NPM bouncer can (SETUP.md step 9)"
+            : "Reached the app after the ban. If this host is DNS-only, check the firewall bouncer (or the requests came from inside your LAN)"}">${num(r.npm_after)}</span>` : "0")
+            + (r.npm_blocked ? ` <span class="badge b-good" title="Stopped by NPM with a 403 before reaching the app (NPM bouncer)">+${num(r.npm_blocked)} blocked</span>` : "") },
         ...(write ? [{ h: "", v: (r) => (r.active ? `<button class="btn danger" data-unban="${r.id}">Unban</button>` : "") }] : []),
       ], rows, st === "active" ? "No active bans" : "No decisions")}
     </div>`;
@@ -506,7 +507,7 @@ pages.hosts = async () => {
 
 pages.status = async () => {
   const st = await api("status");
-  const names = { lapi: "CrowdSec LAPI", npm: "NPM access logs", syslog: "OPNsense syslog", geoip: "GeoIP database", cloudflare: "Cloudflare" };
+  const names = { lapi: "CrowdSec LAPI", npm: "NPM access logs", syslog: "OPNsense syslog", geoip: "GeoIP database", cloudflare: "Cloudflare", npm_bouncer: "NPM bouncer" };
   const badge = (c) => (c.ok === true ? '<span class="badge b-good"><span class="dot"></span>working</span>'
     : c.ok === false ? '<span class="badge b-crit"><span class="dot"></span>error</span>'
     : c.enabled ? '<span class="badge b-warn"><span class="dot"></span>waiting</span>' : '<span class="badge">off</span>');

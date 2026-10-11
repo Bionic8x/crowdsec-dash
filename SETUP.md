@@ -129,6 +129,43 @@ Put it in `.env` as `CF_API_TOKEN`, then run `docker compose up -d`. The **Hosts
 - The dashboard redacts credential-like query parameters (`api_key=`, `token=`, ... see `NPM_REDACT_PARAMS`) from stored request URLs. Rows stored before this existed are not changed; they age out after `RETENTION_DAYS`.
 - The dashboard runs as `PUID:PGID` (default `99:100`). If the Status page shows "Permission denied" for the NPM logs, set `PUID`/`PGID` to an owner of those files (`ls -ln` the log folder), or `PUID=0` to run as root.
 
+## 9. Optional: block banned IPs inside NPM too
+
+OPNsense can't block attackers on Cloudflare-proxied hosts (their connections come from Cloudflare). The `npm-bouncer` container closes that gap. It keeps a list of banned IPs in NPM's own custom-config folder, and NPM answers them with **403** before the request reaches the app. It works with the stock `jc21/nginx-proxy-manager` image: no NPMplus, no image changes. It also covers DNS-only hosts, as a second line behind the firewall.
+
+**Before you start:** step 6 (real visitor IPs) must be done for your proxied hosts. Without it NPM only sees Cloudflare's addresses, which the bouncer never blocks.
+
+1. **Create a bouncer key on OPNsense** (it can only *read* decisions):
+   ```sh
+   cscli bouncers add npm-bouncer
+   ```
+   Copy the key it prints.
+2. **Find NPM's container name and data folder** on Unraid:
+   ```sh
+   docker ps --format '{{.Names}}' | grep -i proxy
+   docker inspect -f '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}' <that name>
+   ```
+   The data folder is the source mounted at `/data`, e.g. `/mnt/user/appdata/Nginx-Proxy-Manager-Official/data`.
+3. **Fill in `.env`:**
+   ```
+   COMPOSE_PROFILES=npm-bouncer
+   NPM_CONTAINER=<container name from step 2>
+   NPM_DATA=<data folder from step 2>
+   NPM_BOUNCER_API_KEY=<key from step 1>
+   ```
+4. `docker compose up -d --build`
+
+**Check.**
+- The **Status** page shows an *NPM bouncer* card saying *working*.
+- `ls <NPM_DATA>/nginx/custom` lists `crowdsec-bans.map`, plus `http.conf` and `server_proxy.conf`.
+- On the **Decisions** page, banned IPs that come back now show **+N blocked** (green) next to *Requests after ban*.
+
+**Good to know:**
+- **Your own custom configs are safe.** If you already have an `http.conf` or `server_proxy.conf` there, the bouncer leaves it alone. The Status card then shows the one line to add yourself.
+- **Updates and outages.** The ban list reloads into NPM gracefully, so open connections (a Jellyfin stream) keep going. If NPM restarts or updates, the bouncer restarts with it automatically. If the bouncer stops, NPM keeps blocking the last list it had. It never blocks LAN or Cloudflare addresses.
+- **Your bans only, by default.** It applies bans from your own agents and manual bans. Set `NPM_BOUNCER_ORIGINS=all` to include the CrowdSec community blocklist too.
+- **Uninstall:** remove `COMPOSE_PROFILES=npm-bouncer`, run `docker compose up -d --remove-orphans`, then delete `crowdsec-bans.map` and the two hook files (they start with `# crowdsec-npm-bouncer`) from `<NPM_DATA>/nginx/custom`. Restart NPM.
+
 ---
 
 ## Troubleshooting
@@ -143,4 +180,7 @@ Put it in `.env` as `CF_API_TOKEN`, then run `docker compose up -d`. The **Hosts
 | Map has dots but no countries | The image was built without internet access. Rebuild with `docker compose build --no-cache crowdsec-dash`. |
 | No country / AS info | GeoIP download failed (Status › GeoIP). The container needs outbound access to `download.db-ip.com`. |
 | Agent can't connect | `docker logs crowdsec-agent`. Usually `LAPI_URL` or the `unraid-npm` password. |
+| Status › NPM bouncer: "can't see NPM's nginx" | `NPM_CONTAINER` doesn't match NPM's name in `docker ps`, or NPM is stopped. Fix it and `docker compose up -d`. |
+| Status › NPM bouncer: "HTTP Error 403" | Wrong `NPM_BOUNCER_API_KEY`. Re-run `cscli bouncers add` (step 9). |
+| Banned IP still reaches a proxied host | Step 6 isn't done for that host: NPM sees Cloudflare's IP, not the visitor. |
 | Test a scenario | `docker exec crowdsec-agent cscli explain --file /var/log/npm/proxy-host-1_access.log --type nginx-proxy-manager` shows each parser and scenario step for those lines. |

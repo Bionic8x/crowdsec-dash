@@ -8,6 +8,8 @@ A self-hosted dashboard that puts three views of your edge side by side:
 
 …plus a world map of where threats and traffic come from, a per-IP timeline that merges all three, and optional **Cloudflare** awareness: which hosts are proxied (where a firewall ban can't help) and which are DNS-only.
 
+For those proxied hosts there's an optional **NPM bouncer**: it blocks banned IPs inside stock Nginx Proxy Manager (403) using NPM's own custom-config hooks, no NPMplus or image changes needed (SETUP.md step 9).
+
 ```
 crowdsec-dash/
 ├── docker-compose.yml      dashboard + a CrowdSec agent for NPM logs
@@ -18,11 +20,13 @@ crowdsec-dash/
 │   ├── acquis.d/npm.yaml           which logs to read
 │   ├── scenarios/jellyfin-npm-bf.yaml   example custom scenario
 │   └── parsers/cloudflare-whitelist.yaml   never ban Cloudflare edges
-└── dashboard/              the app (Python + Starlette, vanilla JS + d3)
-    ├── app/main.py         web server, routes, starts collectors
-    ├── app/queries.py      all the SQL
-    ├── app/collectors/     lapi.py · npm_logs.py · syslog_fw.py · cloudflare.py
-    └── static/             index.html · app.js · style.css
+├── dashboard/              the app (Python + Starlette, vanilla JS + d3)
+│   ├── app/main.py         web server, routes, starts collectors
+│   ├── app/queries.py      all the SQL
+│   ├── app/collectors/     lapi.py · npm_logs.py · syslog_fw.py · cloudflare.py
+│   └── static/             index.html · app.js · style.css
+├── npm-bouncer/            optional: block banned IPs inside NPM (bouncer.py)
+└── test/                   local Docker test stack (throwaway LAPI, real NPM, fake logs)
 ```
 
 ## Quick start

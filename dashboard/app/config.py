@@ -82,6 +82,7 @@ class Settings:
     # Comma separated, "*.example.com" wildcards allowed, "*" disables the check.
     allowed_hosts = _list("ALLOWED_HOSTS")
     allow_write = _bool("ALLOW_WRITE", False)  # enables Ban / Unban buttons
+    npm_bouncer_status_file = os.environ.get("NPM_BOUNCER_STATUS", "/bouncer-status/npm-bouncer.json")
     ban_durations = _list("BAN_DURATIONS", "1h,4h,24h,168h")  # what the Ban form may ask for
     lan_cidrs = _list(
         "LAN_CIDRS",

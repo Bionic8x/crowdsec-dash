@@ -29,7 +29,7 @@ CrowdSec splits into three jobs, and your setup spreads them across two boxes:
 |---|---|---|
 | Read logs, spot attacks | **Log processor** (agent / "machine") | OPNsense (its own logs) + `crowdsec-agent` on Unraid (NPM logs) |
 | Store alerts, turn them into bans | **LAPI** (Local API) | OPNsense |
-| Enforce bans | **Remediation component** (bouncer) | OPNsense firewall bouncer → pf tables |
+| Enforce bans | **Remediation component** (bouncer) | OPNsense firewall bouncer → pf tables; optionally `npm-bouncer` → NPM (section 6) |
 
 The dashboard is a fourth *machine*. It logs in like an agent but only reads.
 
@@ -57,7 +57,8 @@ All in `dashboard/app/collectors/`. Each is an `async def run()` loop started fr
 
 ### `npm_logs.py`: tailing files without losing your place
 - One regex (`LINE`) matches NPM's log format. The comment above it maps each part back to the nginx `log_format`.
-- For each file it stores `inode:offset` in the `kv` table. A new inode means the log was rotated, and a file smaller than the offset means it was truncated; either way it starts over from the top.
+- For each file it stores `inode:offset:fingerprint` in the `kv` table, the fingerprint being a hash of the file's first bytes. A file smaller than the offset was truncated; a new inode *and* different first bytes means it was rotated. Either way it starts over from the top. (Checking the inode alone isn't enough on Unraid: `/mnt/user` can hand out new inode numbers after a reboot.)
+- Query-string values that look like credentials (`api_key=`, `token=`…) are stored as `REDACTED`.
 - It only reads up to the last complete newline, so a half-written line is picked up on the next pass.
 - `via_cf` is set when the client IP is a Cloudflare edge address. That's the "real IP not restored" warning.
 
@@ -102,10 +103,20 @@ No framework and no build step. `render()` reads `location.hash` (`#/decisions?s
 - `stackedBars()` draws the time charts with d3 scales and `d3.stack()`, plus a hover layer.
 - `worldMap()` uses d3-geo's Natural Earth projection. `topoFeatures()` is a hand-written ~20-line TopoJSON decoder, which shows how TopoJSON shares borders as delta-encoded "arcs".
 
+## 6. The NPM bouncer: `npm-bouncer/bouncer.py`
+
+A bouncer is the simplest CrowdSec client: an API key that can only *read* decisions. This one turns them into an nginx block list using only what stock NPM already offers.
+
+- **Hooks.** NPM includes optional files from `/data/nginx/custom/`. `http.conf` defines `geo $crowdsec_banned { … include crowdsec-bans*.map; }`, and `server_proxy.conf` (included in every proxy host) says `if ($crowdsec_banned) { return 403; }`. `geo` matches the client address *after* `real_ip_header` restored it, so Cloudflare-proxied visitors are matched by their real IP. The `*` in the include means a missing list is not an error, so NPM can never fail to start because of it.
+- **Sync.** `GET /v1/decisions/stream?startup=true` returns all active decisions once. After that, `startup=false` returns only `new` and `deleted` since the last call. `Bans` maps each IP to its decision ids, so an IP banned twice stays blocked until both decisions end. Every hour it does a full re-pull to correct any drift.
+- **Reload.** nginx only re-reads config on reload, so the bouncer sends nginx's master process `SIGHUP`, a graceful reload where old workers finish their open connections. To see that process, the container shares NPM's PID namespace (`pid: container:<npm>`).
+- **Least privilege.** The container drops every Linux capability except `KILL` (to signal nginx) and `DAC_OVERRIDE` (to write the list). Because it has fewer capabilities than NPM's processes, the kernel refuses it access to their memory, environment and files (`/proc/<pid>/root`), even though it can see them.
+- **Dashboard link.** It writes a status file to a shared volume (the *NPM bouncer* card on the Status page). In the logs, its 403s have no upstream status (`- - 403`), which is how the Decisions page counts **blocked** separately from requests that got through.
+
 ## Ideas for what to build next
 
-1. **Cloudflare enforcement**: the CrowdSec Cloudflare Worker bouncer, then watch "Requests after ban" drop to 0 for proxied hosts.
+1. **Cloudflare-edge enforcement**: the CrowdSec Cloudflare Worker bouncer would stop banned IPs at Cloudflare before they reach you at all (the NPM bouncer stops them at your door). Mind the free-plan Worker quotas.
 2. **Notifications**: a `notify.py` collector that posts to ntfy or Discord when a ban targets a host you care about.
 3. **Your own scenario**: e.g. "more than 30 404s on one host in a minute". Write it, run `cscli explain`, then watch it fire here.
-4. **AppSec / WAF**: CrowdSec's AppSec component can inspect requests inline. NPM would need the OpenResty bouncer for that.
+4. **AppSec / WAF**: CrowdSec's AppSec component can inspect requests inline. That needs the Lua (OpenResty) bouncer inside NPM, which the stock image doesn't ship.
 5. **Hairpin traffic**: LAN clients using your public hostnames show up as the router IP (NAT reflection). Split DNS on OPNsense (Unbound host overrides) would send LAN clients straight to NPM.
