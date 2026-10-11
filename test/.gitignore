@@ -1,2 +1,4 @@
 data/
 .env.test
+demo-data/
+demo-opnsense.env

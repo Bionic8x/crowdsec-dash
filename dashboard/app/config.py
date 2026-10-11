@@ -69,6 +69,7 @@ class Settings:
 
     # --- Cloudflare (optional) ---------------------------------------------
     cf_api_token = os.environ.get("CF_API_TOKEN", "")
+    cf_api_url = os.environ.get("CF_API_URL", "https://api.cloudflare.com/client/v4").rstrip("/")  # tests point this at a mock
     cf_sync_minutes = _int("CF_SYNC_MINUTES", 60)
     cf_fetch_events = _bool("CF_FETCH_EVENTS", False)  # needs Zone > Analytics > Read
     cf_events_poll_minutes = _int("CF_EVENTS_POLL_MINUTES", 5)

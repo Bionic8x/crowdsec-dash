@@ -33,7 +33,7 @@ from ..db import db, iso, now_iso, utcnow
 from ..timeutil import norm_ts
 
 log = logging.getLogger("cloudflare")
-API = "https://api.cloudflare.com/client/v4"
+API = settings.cf_api_url
 
 # Published at https://www.cloudflare.com/ips/ - refreshed at startup when reachable.
 CF_RANGES_DEFAULT = [

@@ -78,7 +78,21 @@ $C run --rm probe 203.0.113.50 81.2.69.142        # through NPM "via Cloudflare"
 $C exec -T nginx-proxy-manager cat /data/nginx/custom/crowdsec-bans.map
 ```
 
-## 5. Clean up
+## 5. Demo data and README screenshots
+
+```sh
+sh test/demo.sh          # fresh stack + a made-up day of data, then docs/screenshots/*.png (~6 min)
+sh test/demo.sh down     # remove it
+```
+
+Layers `docker-compose.demo.yml` on top of the test stack: a fake Cloudflare API
+(`tools/mock_cloudflare.py`), no dashboard password (it's bound to 127.0.0.1), and its own data
+folder `test/demo-data`. `tools/demo.py` writes the data: `example.com` hosts, attackers drawn from
+hosting-provider ranges, bans from two machines (`opnsense`, `unraid-npm`). The screenshots come from
+Playwright's Chromium (`tools/screenshots.py`), which renders the flag emoji that Windows browsers don't.
+While it runs, http://127.0.0.1:8088 shows the demo.
+
+## 6. Clean up
 
 ```sh
 $C --profile tools --profile npm-bouncer down -v      # containers, network and volumes

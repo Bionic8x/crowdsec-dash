@@ -10,6 +10,15 @@ A self-hosted dashboard that puts three views of your edge side by side:
 
 For those proxied hosts there's an optional **NPM bouncer**: it blocks banned IPs inside stock Nginx Proxy Manager (403) using NPM's own custom-config hooks, no NPMplus or image changes needed (SETUP.md step 9).
 
+![Overview: bans, firewall drops and proxy traffic on one page, with a map of where it comes from](docs/screenshots/overview.png)
+
+| | |
+|---|---|
+| ![Decisions page](docs/screenshots/decisions.png) **Decisions**: who's banned, which site they attacked, and whether they came back (firewall hits, requests blocked in NPM) | ![IP page](docs/screenshots/ip.png) **IP page**: one attacker's day across Cloudflare, NPM, CrowdSec and the firewall |
+| ![Hosts & Cloudflare page](docs/screenshots/hosts.png) **Hosts & Cloudflare**: which sites are proxied, whether real IPs are restored, what Cloudflare blocked | ![Firewall drops page](docs/screenshots/firewall.png) **Firewall drops**: probed ports, top sources, drops caused by CrowdSec bans |
+
+<sub>Screenshots use made-up demo data: `example.com` hosts and generated addresses from hosting-provider ranges (`sh test/demo.sh` recreates them).</sub>
+
 ```
 crowdsec-dash/
 ├── docker-compose.yml      dashboard + a CrowdSec agent for NPM logs
@@ -26,7 +35,8 @@ crowdsec-dash/
 │   ├── app/collectors/     lapi.py · npm_logs.py · syslog_fw.py · cloudflare.py
 │   └── static/             index.html · app.js · style.css
 ├── npm-bouncer/            optional: block banned IPs inside NPM (bouncer.py)
-└── test/                   local Docker test stack (throwaway LAPI, real NPM, fake logs)
+├── docs/screenshots/       the images above (made with test/demo.sh)
+└── test/                   local Docker test stack (throwaway LAPI, real NPM, fake logs, demo data)
 ```
 
 ## Quick start

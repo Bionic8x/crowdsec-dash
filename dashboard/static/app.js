@@ -291,8 +291,9 @@ pages.overview = async () => {
     <div class="grid g-3">
       <div class="card"><h2>Top hostile sources <span class="sub">alerts · drops · failed requests</span></h2>
         ${table([
-          { h: "IP", v: (r) => ipLink(r.ip) + (r.banned ? ' <span class="badge b-crit" title="Active CrowdSec ban">banned</span>' : "") },
-          { h: "", v: (r) => country(r.country) },
+          // the flag shares the IP cell so the numbers fit a third-width card
+          { h: "IP", v: (r) => `${ipLink(r.ip)} <span title="${esc(r.country || "")}">${flag(r.country)}</span>`
+              + (r.banned ? ' <span class="badge b-crit" title="Active CrowdSec ban">banned</span>' : "") },
           { h: "Alerts", cls: "num", v: (r) => num(r.alerts) },
           { h: "Drops", cls: "num", v: (r) => num(r.drops) },
           { h: "Errors", cls: "num", v: (r) => num(r.errs) },
@@ -518,7 +519,9 @@ pages.status = async () => {
           ${c.last_ok ? `<dt>last ok</dt><dd>${ago(c.last_ok)}</dd>` : ""}
           ${Object.entries(c.info).map(([ik, iv]) => `<dt>${esc(ik)}</dt><dd>${esc(Array.isArray(iv) ? iv.join(", ") : iv)}</dd>`).join("")}
         </dl>
-        ${c.last_error ? `<div class="note bad" style="font-size:12px">${esc(c.last_error)}</div>` : ""}
+        ${c.last_error ? (c.ok === true  // a startup hiccup it has since recovered from shouldn't look like an outage
+          ? `<div class="note muted" style="font-size:12px">Recovered from: ${esc(c.last_error)}</div>`
+          : `<div class="note bad" style="font-size:12px">${esc(c.last_error)}</div>`) : ""}
       </div>`).join("")}
       <div class="card collector"><div class="head">Database rows</div><dl class="kv">
         ${Object.entries(st.counts).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${num(v)}</dd>`).join("")}</dl></div>

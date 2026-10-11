@@ -1,0 +1,53 @@
+# Demo data for screenshots, layered on top of the test stack (test/README.md, "Demo data").
+# Fake Cloudflare API, no dashboard password (bound to 127.0.0.1 only), its own data folder.
+
+services:
+  crowdsec-dash:
+    environment:
+      CF_API_URL: http://mock-cloudflare:8000
+      CF_API_TOKEN: demo
+      CF_FETCH_EVENTS: "true"
+      CF_EVENTS_POLL_MINUTES: "1"
+      DASH_PASSWORD: ""
+      ALLOW_NO_AUTH: "true"
+      SYSLOG_ALLOWED_SOURCES: 172.31.99.11
+      FW_INTERFACES: igb0
+    volumes:
+      - ./test/demo-data:/data
+
+  mock-cloudflare:
+    build: ./dashboard                 # reuses the dashboard image for its GeoIP reader
+    entrypoint: ["python", "/tools/mock_cloudflare.py"]
+    environment:
+      GEOIP_DIR: /geoip
+    volumes:
+      - ./test/tools:/tools:ro
+      - ./test/demo-data/geoip:/geoip:ro
+
+  # demo.py npm|syslog|alerts|after-ban (run with `run --rm demo ...`)
+  demo:
+    image: python:3.12-slim
+    profiles: ["tools"]
+    environment:
+      LAPI_URL: http://lapi:8080
+      AGENT_ID: ${AGENT_MACHINE_ID:-unraid-npm}
+      AGENT_PASSWORD: ${AGENT_MACHINE_PASSWORD}
+      OPNSENSE_ID: opnsense
+      OPNSENSE_PASSWORD: ${DEMO_OPNSENSE_PASSWORD:-}
+    volumes:
+      - npmlogs:/logs
+      - ./test/tools:/tools:ro
+    entrypoint: ["python", "/tools/demo.py"]
+    networks:
+      default:
+        ipv4_address: 172.31.99.11
+
+  # README screenshots -> docs/screenshots (run with `run --rm shots`)
+  shots:
+    image: mcr.microsoft.com/playwright/python:v1.49.1-noble
+    profiles: ["tools"]
+    working_dir: /tmp
+    volumes:
+      - ./test/tools:/tools:ro
+      - ./docs/screenshots:/out
+    entrypoint: ["sh", "-c", "pip install -q playwright==1.49.1 && python /tools/screenshots.py"]
