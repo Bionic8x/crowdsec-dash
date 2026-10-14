@@ -83,6 +83,7 @@ services:
     restart: unless-stopped
     # Share NPM's process list so we can tell its nginx to reload (no Docker socket needed).
     # Must be NPM's container name as shown by `docker ps`.
+    # If NPM restarts (backup, update) this container stops with it: install scripts/npm-bouncer-watchdog.sh.
     pid: "container:${NPM_CONTAINER:-Nginx-Proxy-Manager-Official}"
     # Root, but with only these capabilities. Having fewer capabilities than NPM's processes
     # also means the kernel won't let this container read NPM's memory, environment or files.

@@ -99,7 +99,13 @@ def npm_bouncer_status() -> dict:
         return {"enabled": False, "ok": None, "last_ok": None, "last_error": None,
                 "info": {"note": "not running (optional: blocks banned IPs inside NPM, SETUP.md step 9)"}}
     age = (datetime.now(timezone.utc) - updated).total_seconds()
-    error = f"no update for {int(age)}s: is crowdsec-npm-bouncer running?" if age > 120 else st.get("error")
+    if age > 120:
+        since = f"{age / 3600:.1f}h" if age >= 3600 else f"{int(age // 60)}m"
+        error = (f"no update for {since}: the crowdsec-npm-bouncer container has stopped, usually because NPM "
+                 "restarted (backup or update). Fix: docker compose up -d --force-recreate npm-bouncer. "
+                 "To make this automatic, install scripts/npm-bouncer-watchdog.sh (SETUP.md step 9).")
+    else:
+        error = st.get("error")
     ok = bool(st.get("ok")) and not error
     labels = {"banned": "IPs blocked in NPM", "skipped": "skipped (LAN / Cloudflare / invalid)",
               "last_reload": "last nginx reload", "origins": "decision origins"}

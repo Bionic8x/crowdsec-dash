@@ -159,6 +159,14 @@ OPNsense can't block attackers on Cloudflare-proxied hosts (their connections co
    NPM_BOUNCER_API_KEY=<key from step 1>
    ```
 4. `docker compose up -d --build`
+5. **Install the watchdog.** When NPM restarts (Appdata Backup stopping containers, Auto Update Applications, a manual restart), Docker stops the bouncer with it, and its restart policy can't bring it back. The watchdog recreates it within 5 minutes.
+   - Install the **User Scripts** plugin (Apps tab) if you don't have it.
+   - **Settings › User Scripts › Add New Script**, name it `npm-bouncer-watchdog`.
+   - Click the gear icon › **Edit Script**, and replace the contents with [`scripts/npm-bouncer-watchdog.sh`](scripts/npm-bouncer-watchdog.sh).
+   - Set the schedule to **Custom** and enter `*/5 * * * *`. Click **Apply**.
+   - Click **Run Script** once. A healthy bouncer prints nothing.
+
+   The script works out the compose project, folder and NPM container name from the running bouncer and your `.env`, so it needs no editing. It does nothing while NPM is down, so it won't fight a backup in progress.
 
 **Check.**
 - The **Status** page shows an *NPM bouncer* card saying *working*.
@@ -167,7 +175,7 @@ OPNsense can't block attackers on Cloudflare-proxied hosts (their connections co
 
 **Good to know:**
 - **Your own custom configs are safe.** If you already have an `http.conf` or `server_proxy.conf` there, the bouncer leaves it alone. The Status card then shows the one line to add yourself.
-- **Updates and outages.** The ban list reloads into NPM gracefully, so open connections (a Jellyfin stream) keep going. If NPM restarts or updates, the bouncer restarts with it automatically. If the bouncer stops, NPM keeps blocking the last list it had. It never blocks LAN or Cloudflare addresses.
+- **Updates and outages.** The ban list reloads into NPM gracefully, so open connections (a Jellyfin stream) keep going. If NPM restarts or updates, the watchdog (step 5 above) brings the bouncer back within 5 minutes. If the bouncer stops, NPM keeps blocking the last list it had. It never blocks LAN or Cloudflare addresses.
 - **Your bans only, by default.** It applies bans from your own agents and manual bans. Set `NPM_BOUNCER_ORIGINS=all` to include the CrowdSec community blocklist too.
 - **Uninstall:** remove `COMPOSE_PROFILES=npm-bouncer`, run `docker compose up -d --remove-orphans`, then delete `crowdsec-bans.map` and the two hook files (they start with `# crowdsec-npm-bouncer`) from `<NPM_DATA>/nginx/custom`. Restart NPM.
 
@@ -186,6 +194,7 @@ OPNsense can't block attackers on Cloudflare-proxied hosts (their connections co
 | No country / AS info | GeoIP download failed (Status › GeoIP). The container needs outbound access to `download.db-ip.com`. |
 | Agent can't connect | `docker logs crowdsec-agent`. Usually `LAPI_URL` or the `unraid-npm` password. |
 | Status › NPM bouncer: "can't see NPM's nginx" | `NPM_CONTAINER` doesn't match NPM's name in `docker ps`, or NPM is stopped. Fix it and `docker compose up -d`. |
+| Status › NPM bouncer: "no update for …" | The bouncer stopped when NPM restarted. `docker compose up -d --force-recreate npm-bouncer` (a plain restart isn't enough), then install the watchdog (step 9.5). Check its runs under Settings › User Scripts › Show Log. |
 | Status › NPM bouncer: "HTTP Error 403" | Wrong `NPM_BOUNCER_API_KEY`. Re-run `cscli bouncers add` (step 9). |
 | Banned IP still reaches a proxied host | Step 6 isn't done for that host: NPM sees Cloudflare's IP, not the visitor. |
 | Test a scenario | `docker exec crowdsec-agent cscli explain --file /var/log/npm/proxy-host-1_access.log --type nginx-proxy-manager` shows each parser and scenario step for those lines. |
