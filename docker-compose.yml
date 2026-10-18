@@ -16,6 +16,10 @@ services:
     build: ./dashboard
     container_name: crowdsec-dash
     restart: unless-stopped
+    labels:
+      # Unraid Docker tab: icon, and the "WebUI" menu link (needs BIND_IP set in .env)
+      net.unraid.docker.icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/crowdsec.png
+      net.unraid.docker.webui: http://${BIND_IP:-}:8088
     ports:
       # BIND_IP = the Unraid LAN address, so nothing on other interfaces (VPN, docker, WAN) can connect
       - "${BIND_IP:-0.0.0.0}:8088:8088"          # web UI
@@ -52,6 +56,8 @@ services:
     image: crowdsecurity/crowdsec:latest
     container_name: crowdsec-agent
     restart: unless-stopped
+    labels:
+      net.unraid.docker.icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/crowdsec.png
     environment:
       TZ: ${TZ:-America/New_York}
       DISABLE_LOCAL_API: "true"            # agent only - the LAPI lives on OPNsense
@@ -81,6 +87,8 @@ services:
     container_name: crowdsec-npm-bouncer
     profiles: ["npm-bouncer"]
     restart: unless-stopped
+    labels:
+      net.unraid.docker.icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/crowdsec.png
     # Share NPM's process list so we can tell its nginx to reload (no Docker socket needed).
     # Must be NPM's container name as shown by `docker ps`.
     # If NPM restarts (backup, update) this container stops with it: install scripts/npm-bouncer-watchdog.sh.
