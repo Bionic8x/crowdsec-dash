@@ -176,7 +176,12 @@ OPNsense can't block attackers on Cloudflare-proxied hosts (their connections co
 **Good to know:**
 - **Your own custom configs are safe.** If you already have an `http.conf` or `server_proxy.conf` there, the bouncer leaves it alone. The Status card then shows the one line to add yourself.
 - **Updates and outages.** The ban list reloads into NPM gracefully, so open connections (a Jellyfin stream) keep going. If NPM restarts or updates, the watchdog (step 5 above) brings the bouncer back within 5 minutes. If the bouncer stops, NPM keeps blocking the last list it had. It never blocks LAN or Cloudflare addresses.
-- **Your bans only, by default.** It applies bans from your own agents and manual bans. Set `NPM_BOUNCER_ORIGINS=all` to include the CrowdSec community blocklist too.
+- **Your bans only, by default.** It applies bans from your own agents and manual bans (`crowdsec,cscli`). Blocklists don't reach Cloudflare-proxied sites any other way, because the firewall only ever sees Cloudflare's address. To include them, add the origins you want to `NPM_BOUNCER_ORIGINS`:
+  - `lists`: blocklists you subscribed your Security Engine to in the CrowdSec Console.
+  - `CAPI`: the community blocklist.
+  - `all`: everything.
+
+  A list of about 70,000 IPs adds roughly 100 MB to NPM's memory, and reloads stay graceful.
 - **Uninstall:** remove `COMPOSE_PROFILES=npm-bouncer`, run `docker compose up -d --remove-orphans`, then delete `crowdsec-bans.map` and the two hook files (they start with `# crowdsec-npm-bouncer`) from `<NPM_DATA>/nginx/custom`. Restart NPM.
 
 ---

@@ -103,7 +103,7 @@ services:
       TZ: ${TZ:-America/New_York}
       LAPI_URL: ${LAPI_URL}
       BOUNCER_API_KEY: ${NPM_BOUNCER_API_KEY:-}      # cscli bouncers add npm-bouncer (on OPNsense)
-      INCLUDE_ORIGINS: ${NPM_BOUNCER_ORIGINS:-crowdsec,cscli}   # "all" adds community blocklists
+      INCLUDE_ORIGINS: ${NPM_BOUNCER_ORIGINS:-crowdsec,cscli}   # also: lists, CAPI, or "all"
       NPM_CUSTOM_DIR: /npm-custom
       NGINX_CUSTOM_PATH: /data/nginx/custom          # the same folder as NPM itself sees it
     volumes:

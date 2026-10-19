@@ -52,7 +52,10 @@ MAP_NAME = "crowdsec-bans.map"
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "10"))
 RELOAD_MIN_SECONDS = int(os.environ.get("RELOAD_MIN_SECONDS", "30"))  # at most one nginx reload per this
 RESYNC_MINUTES = int(os.environ.get("RESYNC_MINUTES", "60"))          # full re-pull, corrects any drift
-ORIGINS = [o.lower() for o in _list("INCLUDE_ORIGINS", "crowdsec,cscli")]  # "all" = also community lists
+# "all" = also blocklists. The LAPI's origins filter is case-sensitive and the community list is
+# "CAPI" (every other origin is lowercase), so normalise rather than lowercase everything.
+ORIGINS = [{"capi": "CAPI"}.get(o.lower(), o.lower()) for o in _list("INCLUDE_ORIGINS", "crowdsec,cscli")]
+_ORIGINS_LC = {o.lower() for o in ORIGINS}
 TYPES = [t.lower() for t in _list("DECISION_TYPES", "ban")]
 STATUS_FILE = os.environ.get("STATUS_FILE", "/status/npm-bouncer.json")
 LAN_CIDRS = _list("LAN_CIDRS", "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,100.64.0.0/10,"
@@ -129,7 +132,7 @@ class Bans:
     def wanted(self, d: dict) -> str | None:
         if (d.get("type") or "").lower() not in TYPES:
             return None
-        if "all" not in ORIGINS and (d.get("origin") or "").lower() not in ORIGINS:
+        if "all" not in ORIGINS and (d.get("origin") or "").lower() not in _ORIGINS_LC:
             return None
         net = to_network((d.get("scope") or "").lower(), d.get("value") or "")
         if net is None:
