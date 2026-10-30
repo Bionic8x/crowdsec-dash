@@ -10,4 +10,5 @@ A dashboard plus CrowdSec agent plus optional NPM bouncer, for a CrowdSec LAPI r
 - Keep `.env.example`, `docker-compose.yml` and SETUP.md in step. A new setting needs all three.
 - `crowdsecurity/crowdsec:latest` is intentional. If a release breaks the agent, pin the last good version and note it in the compose comment.
 - The bouncer's security model depends on its compose settings: `cap_drop: [ALL]`, `cap_add: [KILL, DAC_OVERRIDE]`, `read_only` and `no-new-privileges`. Don't widen them without explaining why.
+- Every service in `test/docker-compose.test.yml` that joins the default network needs a fixed `ipv4_address`. Otherwise one started before `lapi` can take `172.31.99.2`, and `lapi` fails with "Address already in use".
 - Personal deployment details (addresses, paths, how the real server is updated) go in `CLAUDE.local.md`, which is never committed.

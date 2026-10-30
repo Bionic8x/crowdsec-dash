@@ -188,7 +188,7 @@ OPNsense can't block attackers on Cloudflare-proxied hosts (their connections co
 
 The dashboard can post each new ban to Discord through [Notifiarr](https://notifiarr.com)'s **Passthrough** integration. Each message says which IP was banned and for which scenario, plus things only the dashboard knows: the site that was attacked, whether that site is behind Cloudflare (so the firewall ban can't stop it), and the country and network.
 
-1. **Get the key.** On notifiarr.com open **Integrations › Passthrough**. Copy the API key shown in its instructions (your Notifiarr API key).
+1. **Turn on Passthrough and get a key.** On notifiarr.com open **Integrations › Passthrough** and enable it. A key alone isn't enough: Notifiarr refuses messages with `pass through integration disabled`. On your Profile page, create an API key and choose **Passthrough** when it asks for the integration type.
 2. **Get the channel ID.** In Discord turn on **User Settings › Advanced › Developer Mode**, then right-click the channel you want and choose **Copy Channel ID**. The Notifiarr bot must be able to post there.
 3. **Fill in `.env`:**
    ```
