@@ -84,6 +84,13 @@ All in `dashboard/app/collectors/`. Each is an `async def run()` loop started fr
 - With a token, it syncs DNS records and stores `proxied` per hostname. The UI uses that to tell you which hosts your firewall can actually protect.
 - The Decisions page's **Requests after ban** column is that idea turned into data: a banned IP still reaching NPM.
 
+### `notify.py`: Discord messages without the flood
+- It doesn't talk to the LAPI at all. It reads the `decisions` table the LAPI collector fills, and keeps the highest decision id it has handled in `kv`. On its first run it just records that id, so turning it on never replays history.
+- New decisions are grouped by IP, so one attacker tripping six scenarios in the same second is one message.
+- A one-hour window (also in `kv`) counts messages. Past `NOTIFY_MAX_PER_HOUR`, IPs are only tallied by scenario and network, and one summary goes out when the window ends.
+- CrowdSec's own notification plugins would run on OPNsense, where the profiles live. Doing it here adds what only the dashboard knows: the site from the alert's `target_fqdn`, and from `cloudflare.host_proxied()` whether a firewall ban can even reach that attacker.
+- Notifiarr's Passthrough URL contains the API key, and `requests` puts URLs in its exceptions. `_scrub()` removes the key from every error before it's logged.
+
 ### `../geoip.py`
 - Downloads the free DB-IP Lite `.mmdb` files monthly and looks up IPs (with an LRU cache). Lookups happen at insert time, so country, lat, and lon are stored on each row and the map is a plain `GROUP BY`.
 
@@ -127,7 +134,7 @@ A bouncer is the simplest CrowdSec client: an API key that can only *read* decis
 ## Ideas for what to build next
 
 1. **Cloudflare-edge enforcement**: the CrowdSec Cloudflare Worker bouncer would stop banned IPs at Cloudflare before they reach you at all (the NPM bouncer stops them at your door). Mind the free-plan Worker quotas.
-2. **Notifications**: a `notify.py` collector that posts to ntfy or Discord when a ban targets a host you care about.
+2. **More notification targets**: `notify.py` speaks Notifiarr's Passthrough format; ntfy or a plain Discord webhook would be a small `send()` variant.
 3. **Your own scenario**: e.g. "more than 30 404s on one host in a minute". Write it, run `cscli explain`, then watch it fire here.
 4. **AppSec / WAF**: CrowdSec's AppSec component can inspect requests inline. That needs the Lua (OpenResty) bouncer inside NPM, which the stock image doesn't ship.
 5. **Hairpin traffic**: LAN clients using your public hostnames show up as the router IP (NAT reflection). Split DNS on OPNsense (Unbound host overrides) would send LAN clients straight to NPM.

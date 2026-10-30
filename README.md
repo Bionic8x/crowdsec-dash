@@ -8,6 +8,8 @@ A self-hosted dashboard that puts three views of your edge side by side:
 
 …plus a world map of where threats and traffic come from, a per-IP timeline that merges all three, and optional **Cloudflare** awareness: which hosts are proxied (where a firewall ban can't help) and which are DNS-only.
 
+New bans can also go to **Discord** through Notifiarr, with the attacked site and its Cloudflare status in each message, and an hourly limit so port-scan sweeps don't flood the channel (SETUP.md step 10).
+
 For those proxied hosts there's an optional **NPM bouncer**: it blocks banned IPs inside stock Nginx Proxy Manager (403) using NPM's own custom-config hooks, no NPMplus or image changes needed (SETUP.md step 9).
 
 ![Overview: bans, firewall drops and proxy traffic on one page, with a map of where it comes from](docs/screenshots/overview.png)
@@ -32,7 +34,7 @@ crowdsec-dash/
 ├── dashboard/              the app (Python + Starlette, vanilla JS + d3)
 │   ├── app/main.py         web server, routes, starts collectors
 │   ├── app/queries.py      all the SQL
-│   ├── app/collectors/     lapi.py · npm_logs.py · syslog_fw.py · cloudflare.py
+│   ├── app/collectors/     lapi.py · npm_logs.py · syslog_fw.py · cloudflare.py · notify.py
 │   └── static/             index.html · app.js · style.css
 ├── npm-bouncer/            optional: block banned IPs inside NPM (bouncer.py)
 ├── docs/screenshots/       the images above (made with test/demo.sh)

@@ -28,7 +28,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from . import geoip, queries, status
-from .collectors import cloudflare, lapi, npm_logs, syslog_fw
+from .collectors import cloudflare, lapi, notify, npm_logs, syslog_fw
 from .config import settings
 from .db import db
 
@@ -124,6 +124,7 @@ async def api_status(request):
             "fw_actions": settings.fw_actions, "fw_interfaces": settings.fw_interfaces,
             "cloudflare_token": bool(settings.cf_api_token), "cf_fetch_events": settings.cf_fetch_events,
             "retention_days": settings.retention_days, "allow_write": settings.allow_write,
+            "notifications": notify.enabled(),
         },
         "cloudflare_ranges": cloudflare.cf_ranges(),
     })
@@ -189,6 +190,16 @@ async def api_ban(request):
     except Exception as e:  # the ban itself worked; the next regular poll will pick it up
         log.warning("sync after ban failed: %s", e)
     return j({"ok": True, "result": res})
+
+
+async def api_notify_test(request):
+    if not notify.enabled():
+        return j({"error": "notifications are off (set NOTIFIARR_API_KEY and NOTIFIARR_CHANNEL_ID)"}, 400)
+    try:
+        await asyncio.to_thread(notify.send_test)
+    except Exception as e:
+        return j({"error": notify._scrub(e)}, 502)
+    return j({"ok": True})
 
 
 async def api_unban(request):
@@ -310,7 +321,7 @@ async def lifespan(app):
             log.error("DASH_PASSWORD is empty: the dashboard will refuse requests until it is set (or ALLOW_NO_AUTH=true)")
     await asyncio.to_thread(geoip.init)
     tasks = []
-    for c in (cloudflare.run, lapi.run, npm_logs.run, syslog_fw.run, housekeeping):
+    for c in (cloudflare.run, lapi.run, npm_logs.run, syslog_fw.run, notify.run, housekeeping):
         t = asyncio.create_task(c(), name=f"{c.__module__}.{c.__name__}")
         t.add_done_callback(_log_crash)
         tasks.append(t)
@@ -335,6 +346,7 @@ routes = [
     Route("/api/hosts", api_hosts),
     Route("/api/ip/{ip:str}", api_ip),
     Route("/api/cloudflare/events", api_cf_events),
+    Route("/api/notify/test", api_notify_test, methods=["POST"]),
     Mount("/static", StaticFiles(directory=STATIC), name="static"),
 ]
 

@@ -43,6 +43,13 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       ALLOW_WRITE: ${ALLOW_WRITE:-false}
       RETENTION_DAYS: ${RETENTION_DAYS:-14}
+      # Discord messages for new bans, through Notifiarr (SETUP.md step 10). Off until both are set.
+      NOTIFIARR_API_KEY: ${NOTIFIARR_API_KEY:-}
+      NOTIFIARR_CHANNEL_ID: ${NOTIFIARR_CHANNEL_ID:-}
+      NOTIFY_MAX_PER_HOUR: ${NOTIFY_MAX_PER_HOUR:-10}
+      NOTIFY_EXCLUDE_SCENARIOS: ${NOTIFY_EXCLUDE_SCENARIOS:-}
+      NOTIFY_MANUAL_BANS: ${NOTIFY_MANUAL_BANS:-true}
+      NOTIFY_DASH_URL: ${NOTIFY_DASH_URL:-}
     volumes:
       - ./data:/data
       - ${NPM_LOGS}:/npm-logs:ro

@@ -74,6 +74,17 @@ class Settings:
     cf_fetch_events = _bool("CF_FETCH_EVENTS", False)  # needs Zone > Analytics > Read
     cf_events_poll_minutes = _int("CF_EVENTS_POLL_MINUTES", 5)
 
+    # --- Discord notifications through Notifiarr (optional) ------------------
+    # Both set = on. The key is the one shown in Notifiarr's Passthrough integration.
+    notifiarr_api_key = os.environ.get("NOTIFIARR_API_KEY", "").strip()
+    notifiarr_channel_id = os.environ.get("NOTIFIARR_CHANNEL_ID", "").strip()
+    notifiarr_url = (os.environ.get("NOTIFIARR_URL")  # tests point this at a mock
+                     or "https://notifiarr.com/api/v1/notification/passthrough").rstrip("/")
+    notify_max_per_hour = _int("NOTIFY_MAX_PER_HOUR", 10)  # the rest are summed up once an hour
+    notify_exclude_scenarios = _list("NOTIFY_EXCLUDE_SCENARIOS")  # globs, e.g. "firewallservices/*"
+    notify_manual_bans = _bool("NOTIFY_MANUAL_BANS", True)  # cscli / dashboard bans
+    notify_dash_url = os.environ.get("NOTIFY_DASH_URL", "").rstrip("/")  # adds an "Open in the dashboard" link
+
     # --- Dashboard ---------------------------------------------------------
     port = _int("PORT", 8088)
     dash_user = os.environ.get("DASH_USER", "")

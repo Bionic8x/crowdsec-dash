@@ -184,6 +184,30 @@ OPNsense can't block attackers on Cloudflare-proxied hosts (their connections co
   A list of about 70,000 IPs adds roughly 100 MB to NPM's memory, and reloads stay graceful.
 - **Uninstall:** remove `COMPOSE_PROFILES=npm-bouncer`, run `docker compose up -d --remove-orphans`, then delete `crowdsec-bans.map` and the two hook files (they start with `# crowdsec-npm-bouncer`) from `<NPM_DATA>/nginx/custom`. Restart NPM.
 
+## 10. Optional: a Discord message for every ban
+
+The dashboard can post each new ban to Discord through [Notifiarr](https://notifiarr.com)'s **Passthrough** integration. Each message says which IP was banned and for which scenario, plus things only the dashboard knows: the site that was attacked, whether that site is behind Cloudflare (so the firewall ban can't stop it), and the country and network.
+
+1. **Get the key.** On notifiarr.com open **Integrations › Passthrough**. Copy the API key shown in its instructions (your Notifiarr API key).
+2. **Get the channel ID.** In Discord turn on **User Settings › Advanced › Developer Mode**, then right-click the channel you want and choose **Copy Channel ID**. The Notifiarr bot must be able to post there.
+3. **Fill in `.env`:**
+   ```
+   NOTIFIARR_API_KEY=<key from step 1>
+   NOTIFIARR_CHANNEL_ID=<channel ID from step 2>
+   ```
+   Optional: `NOTIFY_DASH_URL=http://192.168.1.20:8088` adds an *Open in the dashboard* link to each message.
+4. `docker compose up -d`
+
+**Check.** The **Status** page shows a *Discord (Notifiarr)* card saying *working*. Its **Send test message** button posts a test message to the channel.
+
+**What gets sent.**
+- **Only bans from now on.** On its first start it notes the newest ban and sends nothing older, and it remembers its place across restarts. Bans it finds more than 15 minutes late (the dashboard was down) go into the hourly summary instead.
+- **One message per IP.** An IP that trips several scenarios at once is one message listing them all.
+- **At most `NOTIFY_MAX_PER_HOUR` messages an hour** (default 10). Port-scan sweeps can ban a thousand IPs in an hour. Past the limit, bans are counted and summed up in one message when the hour ends, with the top scenarios and networks. Attacks on your sites are sent before firewall-only bans.
+- **Manual bans** (the Ban button, `cscli decisions add`) are sent too. Set `NOTIFY_MANUAL_BANS=false` to skip them.
+- **Muting scenarios.** `NOTIFY_EXCLUDE_SCENARIOS` takes a comma-separated list with `*` wildcards, e.g. `firewallservices/*` for OPNsense's port-scan bans. Those bans are still made; they're just never sent.
+- Blocklist and community-list bans and simulated decisions are never sent.
+
 ---
 
 ## Troubleshooting

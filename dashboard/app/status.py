@@ -10,6 +10,7 @@ status: dict[str, dict] = {
     "syslog": {"enabled": False, "ok": None, "last_ok": None, "last_error": None, "info": {}},
     "geoip": {"enabled": False, "ok": None, "last_ok": None, "last_error": None, "info": {}},
     "cloudflare": {"enabled": False, "ok": None, "last_ok": None, "last_error": None, "info": {}},
+    "notify": {"enabled": False, "ok": None, "last_ok": None, "last_error": None, "info": {}},
 }
 
 

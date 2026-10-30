@@ -24,6 +24,7 @@ services:
     depends_on: [lapi]
     environment:
       LAPI_POLL_SECONDS: "10"
+      NOTIFIARR_URL: http://mock-notifiarr:8000/api/v1/notification/passthrough
     volumes:
       - ./test/data:/data          # replaces ./data:/data from the main file
     networks:
@@ -54,6 +55,18 @@ services:
       RELOAD_MIN_SECONDS: "5"
     volumes:
       - npm-data:/npm-custom                 # same target as the main file, so it replaces the bind mount
+
+  # Stand-in for Notifiarr's Passthrough API (ban notifications). See test/README.md section 3.
+  mock-notifiarr:
+    image: python:3.12-slim
+    environment:
+      NOTIFIARR_API_KEY: ${NOTIFIARR_API_KEY:-}
+    volumes:
+      - ./test/tools:/tools:ro
+    entrypoint: ["python", "-u", "/tools/mock_notifiarr.py"]
+    networks:
+      default:
+        ipv4_address: 172.31.99.40     # fixed, so it can't take the LAPI's address
 
   # Sends a request through NPM as if it came via Cloudflare from a given visitor IP.
   probe:

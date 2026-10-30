@@ -508,7 +508,7 @@ pages.hosts = async () => {
 
 pages.status = async () => {
   const st = await api("status");
-  const names = { lapi: "CrowdSec LAPI", npm: "NPM access logs", syslog: "OPNsense syslog", geoip: "GeoIP database", cloudflare: "Cloudflare", npm_bouncer: "NPM bouncer" };
+  const names = { lapi: "CrowdSec LAPI", npm: "NPM access logs", syslog: "OPNsense syslog", geoip: "GeoIP database", cloudflare: "Cloudflare", notify: "Discord (Notifiarr)", npm_bouncer: "NPM bouncer" };
   const badge = (c) => (c.ok === true ? '<span class="badge b-good"><span class="dot"></span>working</span>'
     : c.ok === false ? '<span class="badge b-crit"><span class="dot"></span>error</span>'
     : c.enabled ? '<span class="badge b-warn"><span class="dot"></span>waiting</span>' : '<span class="badge">off</span>');
@@ -522,12 +522,25 @@ pages.status = async () => {
         ${c.last_error ? (c.ok === true  // a startup hiccup it has since recovered from shouldn't look like an outage
           ? `<div class="note muted" style="font-size:12px">Recovered from: ${esc(c.last_error)}</div>`
           : `<div class="note bad" style="font-size:12px">${esc(c.last_error)}</div>`) : ""}
+        ${k === "notify" && c.enabled ? '<button class="btn" id="notifytest">Send test message</button> <span id="notifyres" class="muted"></span>' : ""}
       </div>`).join("")}
       <div class="card collector"><div class="head">Database rows</div><dl class="kv">
         ${Object.entries(st.counts).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${num(v)}</dd>`).join("")}</dl></div>
       <div class="card collector"><div class="head">Config</div><dl class="kv">
         ${Object.entries(st.config).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.join(", ") || "(all)" : v)}</dd>`).join("")}</dl></div>
     </div>`;
+  const t = $("#notifytest");
+  if (t) t.onclick = async () => {
+    t.disabled = true;
+    $("#notifyres").textContent = "sending…";
+    try {
+      await api("notify/test", { method: "POST" });
+      $("#notifyres").textContent = "sent, check Discord";
+    } catch (e) {
+      $("#notifyres").textContent = e.message;
+    }
+    t.disabled = false;
+  };
 };
 
 pages.ip = async (params, arg) => {

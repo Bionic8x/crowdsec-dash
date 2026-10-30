@@ -24,13 +24,14 @@ ALLOW_WRITE=true
 ```
 
 Set random values for `DASH_MACHINE_PASSWORD`, `AGENT_MACHINE_PASSWORD` and `DASH_PASSWORD`
-(`openssl rand -hex 24`).
+(`openssl rand -hex 24`). For ban notifications, also set `NOTIFIARR_API_KEY` to a random value and
+`NOTIFIARR_CHANNEL_ID=123456789012345678`: the test stack sends them to a mock, never to Notifiarr.
 
 ## 2. Start
 
 ```sh
 $C build crowdsec-dash
-$C up -d lapi
+$C up -d lapi mock-notifiarr
 set -a; . test/.env.test; set +a
 $C exec -T lapi cscli machines add "$DASH_MACHINE_ID"  --password "$DASH_MACHINE_PASSWORD"  -f /dev/null
 $C exec -T lapi cscli machines add "$AGENT_MACHINE_ID" --password "$AGENT_MACHINE_PASSWORD" -f /dev/null
@@ -54,6 +55,11 @@ $C exec -T lapi cscli decisions list              # what the LAPI thinks is bann
 $C run --rm npm login-fail komga 198.51.100.11 8 15   # slow attack: 8 guesses, 15 s apart -> banned
 $C run --rm npm login-noise komga 198.51.100.21       # normal use with harmless 401s -> no ban
 $C exec -T lapi cscli alerts list
+
+# ban notifications (sent to tools/mock_notifiarr.py, which records them)
+mn() { $C exec -T mock-notifiarr python -c "import sys,urllib.request as u;print(u.urlopen(u.Request('http://127.0.0.1:8000/'+sys.argv[1],method=sys.argv[2])).read().decode())" "$@"; }
+mn messages GET                                   # what the dashboard sent
+mn fail/on POST                                   # simulate a Notifiarr outage (fail/off ends it)
 ```
 
 ## 4. Optional: the NPM bouncer against a real, stock NPM
