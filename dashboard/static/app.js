@@ -78,6 +78,7 @@ const hideTip = () => (tip.style.display = "none");
 // chart: stacked bars over time
 // ---------------------------------------------------------------------------
 function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+let gradientSeq = 0; // unique ids for each chart's <linearGradient>s
 
 /**
  * @param el      container element
@@ -118,9 +119,16 @@ function stackedBars(el, rows, series, bucket, since) {
 
   const bw = x.bandwidth();
   const rx = Math.min(4, bw / 2);
+  // each series fades from its colour at the top to 55% at the bottom
+  const defs = svg.append("defs"), gid = `g${++gradientSeq}`;
+  series.forEach((s, i) => {
+    const lg = defs.append("linearGradient").attr("id", `${gid}-${i}`).attr("x1", 0).attr("y1", 0).attr("x2", 0).attr("y2", 1);
+    lg.append("stop").attr("offset", 0).attr("stop-color", css(s.color));
+    lg.append("stop").attr("offset", 1).attr("stop-color", css(s.color)).attr("stop-opacity", 0.55);
+  });
   series.forEach((s, i) => {
     const isTop = (d) => series.slice(i + 1).every((s2) => d.data[s2.key] === 0);
-    svg.append("g").attr("fill", css(s.color)).selectAll("path").data(stack[i]).join("path")
+    svg.append("g").attr("class", "series").attr("fill", `url(#${gid}-${i})`).selectAll("path").data(stack[i]).join("path")
       .attr("d", (d) => {
         const x0 = x(d.data.t), y0 = y(d[0]), y1 = y(d[1]);
         let h = y0 - y1;
@@ -200,8 +208,8 @@ async function worldMap(el, geo) {
   const color = css(geo.layer === "traffic" ? "--s1" : "--s2");
   const pts = geo.points.filter((p) => p.lat != null && p.lon != null);
   const r = d3.scaleSqrt().domain([0, d3.max(pts, (p) => p.n) || 1]).range([2.5, 18]);
-  g.append("g").selectAll("circle").data(pts.sort((a, b) => b.n - a.n)).join("circle")
-    .attr("class", "pt").attr("fill", color).attr("fill-opacity", 0.75)
+  g.append("g").attr("class", geo.layer === "traffic" ? "pts s1" : "pts").selectAll("circle").data(pts.sort((a, b) => b.n - a.n)).join("circle")
+    .attr("class", "pt").attr("fill", color).attr("fill-opacity", 0.8)
     .attr("cx", (p) => proj([p.lon, p.lat])[0]).attr("cy", (p) => proj([p.lon, p.lat])[1]).attr("r", (p) => r(p.n))
     .on("mousemove", (ev, p) => showTip(`<div class="t">${flag(p.country)} ${esc(p.country || "?")} · ${p.lat}, ${p.lon}</div>
         <div class="r"><span>${geo.layer === "traffic" ? "Requests" : "Events"}</span><b>${num(p.n)}</b></div>
@@ -317,7 +325,7 @@ pages.decisions = async (params) => {
   const rows = await api(`decisions?state=${st}&q=${encodeURIComponent(q)}`);
   const write = state.status?.config?.allow_write;
   view.innerHTML = `
-    <div class="note info">A <b>decision</b> is CrowdSec's verdict ("ban this IP for 4h"). Your OPNsense firewall bouncer pulls these and blocks them in pf.
+    <div class="note info">A <b>decision</b> is CrowdSec's verdict ("ban this IP for 4h"; the length comes from <code>profiles.yaml</code> on the LAPI). Your OPNsense firewall bouncer pulls these and blocks them in pf.
       <b>FW hits</b> counts packets OPNsense dropped from that IP while banned. <b>Requests after ban</b> &gt; 0 means traffic still reached the app anyway,
       usually because the site is behind Cloudflare (Cloudflare connects to you, not the attacker). <b>blocked</b> = stopped inside NPM by the NPM bouncer.</div>
     <div class="card">
@@ -643,12 +651,12 @@ $("#search").onsubmit = (e) => {
   const v = $("#search-input").value.trim();
   if (v) location.hash = `#/ip/${encodeURIComponent(v)}`;
 };
+// "Full 1986" (default, with glow and the animated backdrop) or "Night drive" (flat). index.html applies the saved choice before first paint.
 $("#theme").onclick = () => {
-  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  const next = cur === "light" ? "dark" : "light";
-  document.documentElement.dataset.theme = next; store.set("theme", next); render();
+  const next = document.documentElement.dataset.theme === "night" ? "full" : "night";
+  if (next === "night") document.documentElement.dataset.theme = next; else delete document.documentElement.dataset.theme;
+  store.set("theme", next);
 };
-{ const t = store.get("theme", ""); if (t) document.documentElement.dataset.theme = t; }
 
 view.addEventListener("click", (e) => {
   const card = e.target.closest("[data-href]");

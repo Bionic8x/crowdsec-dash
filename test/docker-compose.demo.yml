@@ -23,6 +23,9 @@ services:
     volumes:
       - ./test/tools:/tools:ro
       - ./test/demo-data/geoip:/geoip:ro
+    networks:
+      default:
+        ipv4_address: 172.31.99.50     # fixed, so it can't take the LAPI's address
 
   # demo.py npm|syslog|alerts|after-ban (run with `run --rm demo ...`)
   demo:

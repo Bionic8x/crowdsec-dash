@@ -66,4 +66,4 @@ IP geolocation by [DB-IP](https://db-ip.com) (CC BY 4.0). Map outlines: Natural 
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Bundles [d3](https://d3js.org) (ISC, notice kept in `dashboard/static/vendor/d3.min.js`).
+MIT, see [LICENSE](LICENSE). Bundles [d3](https://d3js.org) (ISC, notice kept in `dashboard/static/vendor/d3.min.js`) and the Orbitron, Space Grotesk and JetBrains Mono fonts from [Fontsource](https://fontsource.org) (SIL Open Font License 1.1, licences next to each file in `dashboard/static/vendor/fonts/`).
