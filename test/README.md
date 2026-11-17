@@ -102,5 +102,5 @@ While it runs, http://127.0.0.1:8088 shows the demo.
 
 ```sh
 $C --profile tools --profile npm-bouncer down -v      # containers, network and volumes
-rm -rf test/data
+rm -rf test/data test/state
 ```

@@ -53,7 +53,7 @@ services:
     volumes:
       - ./data:/data
       - ${NPM_LOGS}:/npm-logs:ro
-      - bouncer-status:/bouncer-status:ro    # npm-bouncer's status, shown on the Status page
+      - ./state/bouncer-status:/bouncer-status:ro    # npm-bouncer's status, shown on the Status page
 
   crowdsec-agent:
     # "latest" picks up new CrowdSec releases (incl. security fixes) whenever the image is pulled:
@@ -83,8 +83,11 @@ services:
       - ./crowdsec/scenarios/seerr-npm-bf.yaml:/etc/crowdsec/scenarios/seerr-npm-bf.yaml:ro
       - ./crowdsec/scenarios/audiobookshelf-npm-bf.yaml:/etc/crowdsec/scenarios/audiobookshelf-npm-bf.yaml:ro
       - ./crowdsec/parsers/cloudflare-whitelist.yaml:/etc/crowdsec/parsers/s02-enrich/cloudflare-whitelist.yaml:ro
-      - crowdsec-agent-data:/var/lib/crowdsec/data
-      - crowdsec-agent-config:/etc/crowdsec
+      # Agent state lives in plain folders (not named volumes) so folder-based backups such as
+      # Unraid's Appdata Backup can stop the stack and copy it. The image fills an empty
+      # config folder on first start, and rewrites the LAPI login from the env vars above every start.
+      - ./state/agent-data:/var/lib/crowdsec/data
+      - ./state/agent-config:/etc/crowdsec
       - ${NPM_LOGS}:/var/log/npm:ro
 
   # Blocks banned IPs in Nginx Proxy Manager (403), using NPM's own custom-config hooks:
@@ -115,9 +118,4 @@ services:
       NGINX_CUSTOM_PATH: /data/nginx/custom          # the same folder as NPM itself sees it
     volumes:
       - ${NPM_DATA:-./npm-data-not-set}/nginx/custom:/npm-custom
-      - bouncer-status:/status
-
-volumes:
-  crowdsec-agent-data:
-  crowdsec-agent-config:
-  bouncer-status:
+      - ./state/bouncer-status:/status

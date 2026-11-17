@@ -210,6 +210,24 @@ The dashboard can post each new ban to Discord through [Notifiarr](https://notif
 
 ---
 
+## Upgrading: agent state moved to `state/`
+
+Older versions kept the agent's config, its data and the bouncer's status in named Docker volumes. Folder-based backups (Unraid's Appdata Backup) can't copy named volumes, so they now live in `state/` next to `docker-compose.yml`. A fresh install needs nothing. An existing one should copy the volumes over before starting the new version, so the agent keeps its installed hub items and database:
+
+```sh
+cd /mnt/user/appdata/crowdsec-dash
+git pull                                   # or copy the new files in
+docker compose stop                        # all services, the bouncer too if its profile is on
+P=crowdsec-dash                            # compose project name: docker volume ls | grep crowdsec-agent
+for v in crowdsec-agent-config:agent-config crowdsec-agent-data:agent-data bouncer-status:bouncer-status; do
+  mkdir -p "state/${v##*:}"
+  docker run --rm -v "${P}_${v%%:*}:/from:ro" -v "$PWD/state/${v##*:}:/to" alpine cp -a /from/. /to/
+done
+docker compose up -d
+```
+
+Check as in step 5. The agent should log no "Populating configuration directory". (On a fresh install it does, followed by a harmless `rsync … failed to set times on "/etc/crowdsec/acquis.d": Read-only file system` and `code 23`: that folder is mounted read-only.) Once it's been fine for a while, remove the old volumes with `docker volume rm ${P}_crowdsec-agent-config ${P}_crowdsec-agent-data ${P}_bouncer-status`.
+
 ## Troubleshooting
 
 | Symptom | Likely cause |

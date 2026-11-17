@@ -27,12 +27,16 @@ services:
       NOTIFIARR_URL: http://mock-notifiarr:8000/api/v1/notification/passthrough
     volumes:
       - ./test/data:/data          # replaces ./data:/data from the main file
+      - ./test/state/bouncer-status:/bouncer-status:ro   # and ./state/... (same target paths)
     networks:
       default:
         ipv4_address: 172.31.99.20
 
   crowdsec-agent:
     depends_on: [lapi]
+    volumes:
+      - ./test/state/agent-data:/var/lib/crowdsec/data
+      - ./test/state/agent-config:/etc/crowdsec
 
   # A real, stock Nginx Proxy Manager for the npm-bouncer test (profile npm-bouncer).
   nginx-proxy-manager:
@@ -55,6 +59,7 @@ services:
       RELOAD_MIN_SECONDS: "5"
     volumes:
       - npm-data:/npm-custom                 # same target as the main file, so it replaces the bind mount
+      - ./test/state/bouncer-status:/status
 
   # Stand-in for Notifiarr's Passthrough API (ban notifications). See test/README.md section 3.
   mock-notifiarr:
